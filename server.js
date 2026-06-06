@@ -9,7 +9,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Store all active players online
 let players = {};
+const mongoose = require('mongoose');
 
+// Connect to MongoDB using the URI from Render
+const dbURI = process.env.MONGO_URI; 
+
+mongoose.connect(dbURI)
+  .then(() => console.log('Connected to MongoDB Atlas!'))
+  .catch((err) => console.log('Database connection error:', err));
 io.on('connection', (socket) => {
     console.log(`Player connected: ${socket.id}`);
 
