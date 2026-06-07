@@ -1,14 +1,13 @@
-// --- 1. THE CITY DICTIONARY (Based on a 16x16 pixel grid) ---
+// --- 1. TILE DICTIONARY MAPS ---
 const TILE_TYPES = {
-    '.': { indexX: 0,  indexY: 0,  solid: false }, // Grass
-    'R': { indexX: 13, indexY: 28, solid: false }, // Asphalt road pavement
-    'W': { indexX: 24, indexY: 0,  solid: true  }, // Brick red wall
-    'O': { indexX: 24, indexY: 10, solid: true  }, // Orange block wall
-    'B': { indexX: 24, indexY: 14, solid: true  }, // Brown bunker wall
-    'T': { indexX: 24, indexY: 18, solid: true  }  // Green tree
+    '.': { indexX: 0,  indexY: 0,  solid: false }, 
+    'R': { indexX: 13, indexY: 28, solid: false }, 
+    'W': { indexX: 24, indexY: 0,  solid: true  }, 
+    'O': { indexX: 24, indexY: 10, solid: true  }, 
+    'B': { indexX: 24, indexY: 14, solid: true  }, 
+    'T': { indexX: 24, indexY: 18, solid: true  }  
 };
 
-// --- 2. THE VISUAL CITY MAP LAYOUT ---
 const mapLayout = [
     "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
     "W S ............RRRR...................W",
@@ -30,6 +29,7 @@ const mapLayout = [
 let spawnX = 50;
 let spawnY = 50;
 
+// Step 1: Login succeeds -> Reveal the platform UI Hub
 async function sendAuth(type) {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
@@ -43,24 +43,30 @@ async function sendAuth(type) {
     const data = await res.json();
     if (data.success) {
         document.getElementById('auth-box').style.display = 'none';
-        document.getElementById('game-ui').style.display = 'block';
-        initGame();
+        document.getElementById('game-hub').style.display = 'block';
     } else {
         alert("Failed to authenticate!");
     }
 }
 
+// Step 2: Click Play -> Hide the hub and start Phaser engine
+function pressJoinButton() {
+    document.getElementById('game-hub').style.display = 'none';
+    document.getElementById('game-ui').style.display = 'block';
+    initGame();
+}
+
 function initGame() {
     const config = {
         type: Phaser.AUTO,
-        width: 800,  // Shrunk down to fit your browser nicely
-        height: 450, // 16:9 cinematic ratio
+        width: 800,  
+        height: 450, 
         parent: 'phaser-game',
         physics: { 
             default: 'arcade', 
             arcade: { 
                 gravity: { y: 0 },
-                debug: false // KILL THE GREEN BOXES!
+                debug: false // Assures the annoying green boxes are turned OFF
             } 
         },
         scene: { preload, create, update }
@@ -70,7 +76,6 @@ function initGame() {
 
 function preload() {
     this.load.image('player', 'assets/player.png');
-    // Changed frameWidth and frameHeight to 16 to match your exact file sheet structure
     this.load.spritesheet('tileset', 'assets/tileset.png', { frameWidth: 16, frameHeight: 16 });
 }
 
@@ -81,7 +86,7 @@ function create() {
 
     const texture = this.textures.get('tileset');
     const imageWidth = texture.getSourceImage().width;
-    const tilesPerRow = Math.floor(imageWidth / 16); // Swapped to 16 base math calculation
+    const tilesPerRow = Math.floor(imageWidth / 16); 
 
     for (let row = 0; row < mapLayout.length; row++) {
         for (let col = 0; col < mapLayout[row].length; col++) {
@@ -100,7 +105,7 @@ function create() {
 
             if (tileConfig.solid) {
                 let obj = this.solids.create(x, y, 'tileset', frameID).setOrigin(0,0);
-                obj.body.setSize(16, 16); // Match hit box directly to size
+                obj.body.setSize(16, 16); 
                 obj.refreshBody();
             } else {
                 this.ground.create(x, y, 'tileset', frameID).setOrigin(0,0);
@@ -166,3 +171,18 @@ function drawHealthBar(graphics, x, y, health) {
     graphics.fillStyle(0x00ff00);
     graphics.fillRect(x, y, (health / 100) * 16, 3);
 }
+
+window.addEventListener('keydown', async (e) => {
+    if (e.key === '/') {
+        const cmd = prompt("Enter Admin Command:");
+        if (cmd) {
+            const res = await fetch('/admin-command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: cmd })
+            });
+            const data = await res.json();
+            alert(data.success ? "Command Executed!" : "Failed!");
+        }
+    }
+});
