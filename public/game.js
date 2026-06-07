@@ -37,20 +37,17 @@ const mapLayout = [
 
 let spawnX = 80;
 let spawnY = 80;
-let phaserEngineInstance = null; // Track if engine is already awake
+let phaserEngineInstance = null; 
 
 // ROBLOX-STYLE SESSION RETENTION CORE
-// Immediately runs when the page loads up in the browser
 window.onload = function() {
     const sessionActive = localStorage.getItem("noxkel_logged_in");
     
     if (sessionActive === "true") {
-        // If saved, completely skip login and open the dashboard
         document.getElementById('auth-box').style.display = 'none';
         document.getElementById('game-hub').style.display = 'flex';
         tickPlayerCount();
     } else {
-        // If no file found, drop down the login wall safely
         document.getElementById('auth-box').style.display = 'block';
     }
 };
@@ -85,7 +82,6 @@ async function sendAuth(type) {
 
     const data = await res.json();
     if (data.success) {
-        // Save session state to the browser profile memory file
         localStorage.setItem("noxkel_logged_in", "true");
         
         document.getElementById('auth-box').style.display = 'none';
@@ -96,12 +92,10 @@ async function sendAuth(type) {
     }
 }
 
-// Fixed Launcher: Ensures canvas handles sizing container triggers cleanly
 function launchGame() {
     document.getElementById('game-hub').style.display = 'none';
     document.getElementById('game-ui').style.display = 'flex';
     
-    // Boot the Phaser system inside the freshly opened container layout
     if (!phaserEngineInstance) {
         initGameEngine();
     }
@@ -122,9 +116,13 @@ function initGameEngine() {
     phaserEngineInstance = new Phaser.Game(config);
 }
 
+// FIXED PRELOAD ASSET PATH ROUTING
 function preload() {
-    this.load.image('player', 'assets/player.png');
-    this.load.spritesheet('tileset', 'assets/tileset.png', { frameWidth: 16, frameHeight: 16 });
+    // Corrected target directions targeting your case-sensitive MAPS directory structure
+    this.load.image('player', 'MAPS/player.png');
+    this.load.spritesheet('tileset', 'MAPS/tileset.png', { frameWidth: 16, frameHeight: 16 });
+    
+    // Note: WEAPONS/ path assets are pinned here mentally to build our firearms systems later!
 }
 
 function create() {
