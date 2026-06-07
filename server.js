@@ -1,8 +1,18 @@
 const express = require('express');
+const mongoose = require('mongoose'); // You NEED this
 const bcrypt = require('bcrypt');
 const session = require('express-session');
 const app = express();
 
+// CONNECT TO YOUR MONGODB
+mongoose.connect('YOUR_MONGODB_CONNECTION_STRING_HERE');
+
+// DEFINE THE USER MODEL (The database needs to know what a "User" is)
+const User = mongoose.model('User', { 
+    username: String, 
+    password: { type: String, required: true },
+    inventory: { type: Array, default: [] } // This holds the stuff you gift
+});
 app.use(express.json());
 app.use(express.static('public'));
 
