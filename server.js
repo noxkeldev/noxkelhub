@@ -1,60 +1,35 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
+const session = require('express-session');
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
-const path = require('path');
 
-// Serve the game files from the public folder to the browser
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
+app.use(express.static('public'));
 
-// Store all active players online
-let players = {};
-const mongoose = require('mongoose');
+app.use(session({
+    secret: 'super-secret-key',
+    resave: false,
+    saveUninitialized: false
+}));
 
-// Connect to MongoDB using the URI from Render
-const dbURI = process.env.MONGO_URI; 
+const users = []; // Temporary user storage
 
-mongoose.connect(dbURI)
-  .then(() => console.log('Connected to MongoDB Atlas!'))
-  .catch((err) => console.log('Database connection error:', err));
-io.on('connection', (socket) => {
-    console.log(`Player connected: ${socket.id}`);
-
-    // Create a new player profile when someone logs in
-    players[socket.id] = {
-        x: Math.random() * 600 + 100,
-        y: Math.random() * 400 + 100,
-        id: socket.id,
-        color: `hsl(${Math.random() * 360}, 100%, 60%)`, // Peak neon colors
-        name: "Explorer_" + Math.floor(Math.random() * 900 + 100)
-    };
-
-    // Send the current list of players to the newly connected player
-    socket.emit('currentPlayers', players);
-
-    // Tell all other players that a new explorer has entered the world
-    socket.broadcast.emit('newPlayer', players[socket.id]);
-
-    // Listen for movement updates from players
-    socket.on('playerMovement', (movementData) => {
-        if (players[socket.id]) {
-            players[socket.id].x = movementData.x;
-            players[socket.id].y = movementData.y;
-            // Broadcast the updated position to everyone else
-            socket.broadcast.emit('playerMoved', players[socket.id]);
+app.post('/auth', async (req, res) => {
+    const { type, username, password } = req.body;
+    
+    if (type === 'signup') {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        users.push({ username, password: hashedPassword });
+        res.json({ success: true, message: "Account created!" });
+    } else {
+        const user = users.find(u => u.username === username);
+        if (user && await bcrypt.compare(password, user.password)) {
+            req.session.user = username;
+            res.json({ success: true });
+        } else {
+            res.status(401).json({ success: false });
         }
-    });
-
-    // Handle a player disconnecting
-    socket.on('disconnect', () => {
-        console.log(`Player disconnected: ${socket.id}`);
-        delete players[socket.id];
-        io.emit('playerDisconnected', socket.id);
-    });
+    }
 });
 
-// Start the server online
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
-    console.log(`Server is running smoothly on port ${PORT}`);
-});
+app.listen(3000, () => console.log('Server running on port 3000'));
