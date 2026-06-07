@@ -14,22 +14,22 @@ app.use(session({
 
 const users = []; // Temporary user storage
 
-app.post('/auth', async (req, res) => {
-    const { type, username, password } = req.body;
+app.post('/admin-command', async (req, res) => {
+    const { command } = req.body; // e.g., "/give Player1 Sword"
     
-    if (type === 'signup') {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        users.push({ username, password: hashedPassword });
-        res.json({ success: true, message: "Account created!" });
-    } else {
-        const user = users.find(u => u.username === username);
-        if (user && await bcrypt.compare(password, user.password)) {
-            req.session.user = username;
-            res.json({ success: true });
-        } else {
-            res.status(401).json({ success: false });
-        }
+    // Check if it's YOU using the command
+    if (req.session.user !== 'YOUR_ADMIN_NAME') return res.status(403).send("Nice try!");
+
+    const parts = command.split(' '); // ["/give", "Player1", "Sword"]
+    
+    if (parts[0] === '/give') {
+        const target = parts[1]; // "Player1"
+        const item = parts[2];   // "Sword"
+        
+        // AUTOMATED: Update the database directly
+        await User.updateOne({ username: target }, { $push: { inventory: item } });
+        console.log(`Gave ${item} to ${target}`);
+        res.json({ success: true });
     }
 });
-
 app.listen(3000, () => console.log('Server running on port 3000'));
