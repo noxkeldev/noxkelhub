@@ -12,7 +12,7 @@ const session = require('express-session');
 const app = express();
 
 // CONNECT TO YOUR MONGODB
-mongoose.connect(mongodb+srv://sweetcafw:BLACKPINK%40LISA@cluster0.oxbhatm.mongodb.net/?appName=Cluster0);
+mongoose.connect('mongodb+srv://sweetcafw:BLACKPINK%40LISA@cluster0.oxbhatm.mongodb.net/?appName=Cluster0');
 
 // DEFINE THE USER MODEL (The database needs to know what a "User" is)
 const User = mongoose.model('User', { 
