@@ -14,12 +14,6 @@ const app = express();
 // CONNECT TO YOUR MONGODB
 mongoose.connect('mongodb+srv://sweetcafw:BLACKPINK%40LISA@cluster0.oxbhatm.mongodb.net/?appName=Cluster0');
 
-// DEFINE THE USER MODEL (The database needs to know what a "User" is)
-const User = mongoose.model('User', { 
-    username: String, 
-    password: { type: String, required: true },
-    inventory: { type: Array, default: [] } // This holds the stuff you gift
-});
 app.use(express.json());
 app.use(express.static('public'));
 
