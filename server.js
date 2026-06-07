@@ -18,7 +18,7 @@ const User = mongoose.model('User', userSchema);
 
 // 4. BOTTOM: Setup app and routes
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
     secret: 'super-secret-key',
     resave: false,
