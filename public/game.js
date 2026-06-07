@@ -1,4 +1,4 @@
-// --- MASTER MATRIX DICTIONARY CONFIG ---
+// --- MAP DESIGN CONFIGURATION ---
 const TILE_TYPES = {
     '.': { indexX: 0,  indexY: 0,  solid: false }, 
     'R': { indexX: 13, indexY: 28, solid: false }, 
@@ -8,7 +8,6 @@ const TILE_TYPES = {
     'T': { indexX: 24, indexY: 18, solid: true  }  
 };
 
-// MASSIVE EXPANDED GRID CITY LAYOUT (60 columns wide x 24 rows deep)
 const mapLayout = [
     "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
     "W S ............RRRR........................RRRR...........W",
@@ -38,20 +37,42 @@ const mapLayout = [
 
 let spawnX = 80;
 let spawnY = 80;
+let phaserEngineInstance = null; // Track if engine is already awake
 
-// Population metrics simulator
+// ROBLOX-STYLE SESSION RETENTION CORE
+// Immediately runs when the page loads up in the browser
+window.onload = function() {
+    const sessionActive = localStorage.getItem("noxkel_logged_in");
+    
+    if (sessionActive === "true") {
+        // If saved, completely skip login and open the dashboard
+        document.getElementById('auth-box').style.display = 'none';
+        document.getElementById('game-hub').style.display = 'flex';
+        tickPlayerCount();
+    } else {
+        // If no file found, drop down the login wall safely
+        document.getElementById('auth-box').style.display = 'block';
+    }
+};
+
+function logoutSession() {
+    localStorage.removeItem("noxkel_logged_in");
+    document.getElementById('game-hub').style.display = 'none';
+    document.getElementById('auth-box').style.display = 'block';
+}
+
 function tickPlayerCount() {
     let base = 1482;
     let change = Math.floor(Math.random() * 24) - 12;
     let total = base + change;
     if(document.getElementById("live-counter")) {
-        document.getElementById("live-counter").innerText = `⚡ NETWORK INFRASTRUCTURE PLAYERS: ${total}`;
+        document.getElementById("live-counter").innerText = `⚡ NET ONLINE INFRASTRUCTURE: ${total}`;
         document.getElementById("hub-pop").innerText = total;
     }
 }
 setInterval(tickPlayerCount, 2500);
 
-// PLATFORM SYSTEM API COMMUNICATIONS
+// API CREDENTIAL HANDLER
 async function sendAuth(type) {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
@@ -64,21 +85,28 @@ async function sendAuth(type) {
 
     const data = await res.json();
     if (data.success) {
+        // Save session state to the browser profile memory file
+        localStorage.setItem("noxkel_logged_in", "true");
+        
         document.getElementById('auth-box').style.display = 'none';
         document.getElementById('game-hub').style.display = 'flex';
         tickPlayerCount();
     } else {
-        alert("Authentication Core Failed!");
+        alert("Authentication Network Error!");
     }
 }
 
+// Fixed Launcher: Ensures canvas handles sizing container triggers cleanly
 function launchGame() {
     document.getElementById('game-hub').style.display = 'none';
     document.getElementById('game-ui').style.display = 'flex';
-    initGameEngine();
+    
+    // Boot the Phaser system inside the freshly opened container layout
+    if (!phaserEngineInstance) {
+        initGameEngine();
+    }
 }
 
-// APPLICATION INITIALIZATION ENGINE
 function initGameEngine() {
     const config = {
         type: Phaser.AUTO,
@@ -91,7 +119,7 @@ function initGameEngine() {
         },
         scene: { preload, create, update }
     };
-    new Phaser.Game(config);
+    phaserEngineInstance = new Phaser.Game(config);
 }
 
 function preload() {
@@ -103,10 +131,8 @@ function create() {
     this.solids = this.physics.add.staticGroup();
     this.ground = this.add.group();
 
-    // Custom asset placement calculations
     const fixedTilesPerRow = 32; 
 
-    // Render loop parsing the massive extended array
     for (let row = 0; row < mapLayout.length; row++) {
         for (let col = 0; col < mapLayout[row].length; col++) {
             let char = mapLayout[row][col];
@@ -133,17 +159,12 @@ function create() {
         }
     }
 
-    // Set up the player sprite
     this.player = this.physics.add.sprite(spawnX, spawnY, 'player').setScale(0.8);
     this.cursors = this.input.keyboard.createCursorKeys();
     this.physics.add.collider(this.player, this.solids);
 
-    // --- CAMERA SCROLL SYSTEM INTEGRATION ---
-    // Sets world boundary sizing matching the array exactly ($60 \text{ cols} \times 16 \text{ px} = 960\text{px}$ width)
     this.physics.world.setBounds(0, 0, 960, 384);
     this.cameras.main.setBounds(0, 0, 960, 384);
-    
-    // Lock viewport focus cleanly to follow tracking movements
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
     window.teleportToSpawn = () => {
