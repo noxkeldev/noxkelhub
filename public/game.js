@@ -1,13 +1,14 @@
 // --- MAP DESIGN CONFIGURATION ---
 const TILE_TYPES = {
-    '.': { indexX: 0,  indexY: 0,  solid: false }, 
-    'R': { indexX: 13, indexY: 28, solid: false }, 
-    'W': { indexX: 24, indexY: 0,  solid: true  }, 
-    'O': { indexX: 24, indexY: 10, solid: true  }, 
-    'B': { indexX: 24, indexY: 14, solid: true  }, 
-    'T': { indexX: 24, indexY: 18, solid: true  }  
+    '.': { indexX: 0,  indexY: 0,  solid: false }, // Ground / Floor
+    'R': { indexX: 13, indexY: 28, solid: false }, // Asphalt Roads
+    'W': { indexX: 24, indexY: 0,  solid: true  }, // Brick Boundaries
+    'O': { indexX: 24, indexY: 10, solid: true  }, // Orange Structures
+    'B': { indexX: 24, indexY: 14, solid: true  }, // Bunker Walls
+    'T': { indexX: 24, indexY: 18, solid: true  }  // Tree Colliders
 };
 
+// MASSIVE TACTICAL SANDBOX GRID (60 Columns Wide x 24 Rows Deep)
 const mapLayout = [
     "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
     "W S ............RRRR........................RRRR...........W",
@@ -118,18 +119,19 @@ function initGameEngine() {
 
 // FIXED PRELOAD ASSET PATH ROUTING
 function preload() {
-    // Corrected target directions targeting your case-sensitive MAPS directory structure
+    // FIXED: Directed paths to use MAPS/ folder and renamed file to tilemap.png!
     this.load.image('player', 'MAPS/player.png');
-    this.load.spritesheet('tileset', 'MAPS/tileset.png', { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet('tileset', 'MAPS/tilemap.png', { frameWidth: 16, frameHeight: 16 });
     
-    // Note: WEAPONS/ path assets are pinned here mentally to build our firearms systems later!
+    // Note: WEAPONS/ assets are mentally pinned here for when we build guns next!
 }
 
 function create() {
     this.solids = this.physics.add.staticGroup();
     this.ground = this.add.group();
 
-    const fixedTilesPerRow = 32; 
+    // FIXED: Your sheet width is 458px. 458 / 16px per tile = ~28 tiles per row!
+    const fixedTilesPerRow = 28; 
 
     for (let row = 0; row < mapLayout.length; row++) {
         for (let col = 0; col < mapLayout[row].length; col++) {
@@ -145,6 +147,7 @@ function create() {
             let x = col * 16;
             let y = row * 16;
             
+            // Cutting the spreadsheet columns with your exact 28 width factor
             let frameID = (tileConfig.indexY * fixedTilesPerRow) + tileConfig.indexX;
 
             if (tileConfig.solid) {
@@ -161,6 +164,7 @@ function create() {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.physics.add.collider(this.player, this.solids);
 
+    // --- SMOOTH SCROLLING VIEWPORT SETTINGS ---
     this.physics.world.setBounds(0, 0, 960, 384);
     this.cameras.main.setBounds(0, 0, 960, 384);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
