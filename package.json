@@ -5,7 +5,9 @@
   "dependencies": {
     "express": "^4.17.1",
     "socket.io": "^4.0.0",
-    "mongoose": "^8.0.0"
+    "mongoose": "^8.0.0",
+    "bcrypt": "^5.1.0",
+    "express-session": "^1.17.3"
   },
   "scripts": {
     "start": "node server.js"
