@@ -1,15 +1,14 @@
-// --- 1. THE CITY DICTIONARY (Grid spacing coordinates) ---
+// --- 1. THE CITY DICTIONARY (Based on a 16x16 pixel grid) ---
 const TILE_TYPES = {
-    '.': { name: 'grass_plains',  indexX: 0,  indexY: 0,  solid: false }, // Plains for building
-    'R': { name: 'asphalt_road',  indexX: 6,  indexY: 0,  solid: false }, 
-    'W': { name: 'city_wall',     indexX: 12, indexY: 0,  solid: true  }, // Pre-built city walls
-    'O': { name: 'office_orange', indexX: 12, indexY: 5,  solid: true  }, 
-    'B': { name: 'bunker_wall',   indexX: 12, indexY: 7,  solid: true  }, // Used for player structures
-    'T': { name: 'city_tree',     indexX: 12, indexY: 9,  solid: true  }
+    '.': { indexX: 0,  indexY: 0,  solid: false }, // Grass
+    'R': { indexX: 13, indexY: 28, solid: false }, // Asphalt road pavement
+    'W': { indexX: 24, indexY: 0,  solid: true  }, // Brick red wall
+    'O': { indexX: 24, indexY: 10, solid: true  }, // Orange block wall
+    'B': { indexX: 24, indexY: 14, solid: true  }, // Brown bunker wall
+    'T': { indexX: 24, indexY: 18, solid: true  }  // Green tree
 };
 
-// --- 2. THE GIANT CITY MAP (16 rows x 40 columns) ---
-// S = Player Spawn Point (Safest spot, no building allowed here)
+// --- 2. THE VISUAL CITY MAP LAYOUT ---
 const mapLayout = [
     "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
     "W S ............RRRR...................W",
@@ -22,16 +21,14 @@ const mapLayout = [
     "RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
     "W...............RRRR...................W",
     "W...............RRRR...................W",
-    "W............._RRRR_..................W",
-    "W...[PLAINS]....RRRR......[PLAINS].....W",
+    "W...............RRRR...................W",
     "W...............RRRR...................W",
     "W................RRRR...................W",
     "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"
 ];
 
-// --- 3. CORE GLOBAL SETTINGS ---
-let spawnX = 100;
-let spawnY = 100;
+let spawnX = 50;
+let spawnY = 50;
 
 async function sendAuth(type) {
     const username = document.getElementById('username').value;
@@ -56,10 +53,16 @@ async function sendAuth(type) {
 function initGame() {
     const config = {
         type: Phaser.AUTO,
-        width: 1280, // Made it wider to view your massive city map better
-        height: 720,
+        width: 800,  // Shrunk down to fit your browser nicely
+        height: 450, // 16:9 cinematic ratio
         parent: 'phaser-game',
-        physics: { default: 'arcade', arcade: { gravity: { y: 0 } } },
+        physics: { 
+            default: 'arcade', 
+            arcade: { 
+                gravity: { y: 0 },
+                debug: false // KILL THE GREEN BOXES!
+            } 
+        },
         scene: { preload, create, update }
     };
     new Phaser.Game(config);
@@ -67,65 +70,59 @@ function initGame() {
 
 function preload() {
     this.load.image('player', 'assets/player.png');
-    this.load.spritesheet('tileset', 'assets/tileset.png', { frameWidth: 32, frameHeight: 32 });
+    // Changed frameWidth and frameHeight to 16 to match your exact file sheet structure
+    this.load.spritesheet('tileset', 'assets/tileset.png', { frameWidth: 16, frameHeight: 16 });
 }
 
 function create() {
-    // Groups for different map elements
     this.solids = this.physics.add.staticGroup();
     this.ground = this.add.group();
-    this.playerBunkers = this.physics.add.staticGroup(); // Tracks player built walls
+    this.playerBunkers = this.physics.add.staticGroup();
 
     const texture = this.textures.get('tileset');
     const imageWidth = texture.getSourceImage().width;
-    const tilesPerRow = Math.floor(imageWidth / 32);
+    const tilesPerRow = Math.floor(imageWidth / 16); // Swapped to 16 base math calculation
 
-    // Render the Giant Map
     for (let row = 0; row < mapLayout.length; row++) {
         for (let col = 0; col < mapLayout[row].length; col++) {
             let char = mapLayout[row][col];
             
-            // Set dynamic spawn position dynamically based on 'S' placement
             if (char === 'S') {
-                spawnX = col * 32;
-                spawnY = row * 32;
-                char = '.'; // Treat ground underneath spawn as grass
+                spawnX = col * 16;
+                spawnY = row * 16;
+                char = '.';
             }
 
             let tileConfig = TILE_TYPES[char] || TILE_TYPES['.']; 
-            let x = col * 32;
-            let y = row * 32;
+            let x = col * 16;
+            let y = row * 16;
             let frameID = (tileConfig.indexY * tilesPerRow) + tileConfig.indexX;
 
             if (tileConfig.solid) {
-                let obj = this.solids.create(x, y, 'tileset', frameID);
+                let obj = this.solids.create(x, y, 'tileset', frameID).setOrigin(0,0);
+                obj.body.setSize(16, 16); // Match hit box directly to size
                 obj.refreshBody();
             } else {
-                this.ground.create(x, y, 'tileset', frameID);
+                this.ground.create(x, y, 'tileset', frameID).setOrigin(0,0);
             }
         }
     }
 
-    // Spawn the player at the safety layout coordinate
-    this.player = this.physics.add.sprite(spawnX, spawnY, 'player');
+    this.player = this.physics.add.sprite(spawnX, spawnY, 'player').setScale(0.8);
     this.cursors = this.input.keyboard.createCursorKeys();
     
-    // Set up world colliders
     this.physics.add.collider(this.player, this.solids);
     this.physics.add.collider(this.player, this.playerBunkers);
 
-    // --- BUNKER BUILDING MECHANIC ---
-    // Press 'B' key to drop a brown bunker block right where your character stands
     this.buildKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);
     
-    // Setup manual stuck button bypass logic linked to your system UI
     window.teleportToSpawn = () => {
         this.player.setPosition(spawnX, spawnY);
     };
 }
 
 function update() {
-    const speed = 250;
+    const speed = 150;
     this.player.setVelocity(0);
     
     if (this.cursors.left.isDown) this.player.setVelocityX(-speed);
@@ -133,45 +130,39 @@ function update() {
     if (this.cursors.up.isDown) this.player.setVelocityY(-speed);
     if (this.cursors.down.isDown) this.player.setVelocityY(speed);
 
-    // Drop bunker block checking
     if (Phaser.Input.Keyboard.JustDown(this.buildKey)) {
-        // Snap the coordinates perfectly to the grid layout system
-        let gridX = Math.floor(this.player.x / 32) * 32;
-        let gridY = Math.floor(this.player.y / 32) * 32;
+        let gridX = Math.floor(this.player.x / 16) * 16;
+        let gridY = Math.floor(this.player.y / 16) * 16;
 
-        // Calculate bunker sheet index position profile
         const texture = this.textures.get('tileset');
-        const tilesPerRow = Math.floor(texture.getSourceImage().width / 32);
+        const tilesPerRow = Math.floor(texture.getSourceImage().width / 16);
         let bunkerFrameID = (TILE_TYPES['B'].indexY * tilesPerRow) + TILE_TYPES['B'].indexX;
 
-        // Create the damageable bunker item block
-        let bunkerWall = this.playerBunkers.create(gridX, gridY, 'tileset', bunkerFrameID);
+        let bunkerWall = this.playerBunkers.create(gridX, gridY, 'tileset', bunkerFrameID).setOrigin(0,0);
+        bunkerWall.body.setSize(16, 16);
         bunkerWall.refreshBody();
         
-        // Define building structure asset baseline health configuration details
         bunkerWall.health = 100;
         bunkerWall.healthBar = this.add.graphics();
-        drawHealthBar(bunkerWall.healthBar, gridX - 16, gridY - 24, bunkerWall.health);
+        drawHealthBar(bunkerWall.healthBar, gridX, gridY - 8, bunkerWall.health);
 
-        // SYSTEM TEST CODE: Simulates damage when clicking on a player built wall directly 
         bunkerWall.setInteractive();
         bunkerWall.on('pointerdown', () => {
-            bunkerWall.health -= 25; // Take damage per strike
+            bunkerWall.health -= 25;
             if (bunkerWall.health <= 0) {
                 bunkerWall.healthBar.destroy();
                 bunkerWall.destroy();
             } else {
-                drawHealthBar(bunkerWall.healthBar, gridX - 16, gridY - 24, bunkerWall.health);
+                drawHealthBar(bunkerWall.healthBar, gridX, gridY - 8, bunkerWall.health);
             }
         });
     }
 }
 
-// Utility drawing handler configuration layout settings profile details mapping
 function drawHealthBar(graphics, x, y, health) {
     graphics.clear();
-    graphics.fillStyle(0xff0000); // Red background
-    graphics.fillRect(x, y, 32, 5);
-    graphics.fillStyle(0x00ff00); // Green current health tracking display
-    graphics.fillRect(x, y, (health / 100) * 32, 5);
+    graphics.fillStyle(0xff0000);
+    graphics.fillRect(x, y, 16, 3);
+    graphics.fillStyle(0x00ff00);
+    graphics.fillRect(x, y, (health / 100) * 16, 3);
 }
