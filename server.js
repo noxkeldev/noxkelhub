@@ -28,7 +28,7 @@ app.post('/admin-command', async (req, res) => {
     const { command } = req.body; // e.g., "/give Player1 Sword"
     
     // Check if it's YOU using the command
-    if (req.session.user !== 'YOUR_ADMIN_NAME') return res.status(403).send("Nice try!");
+    if (req.session.user !== sweetcafw) return res.status(403).send("Nice try!");
 
     const parts = command.split(' '); // ["/give", "Player1", "Sword"]
     
