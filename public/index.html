@@ -1,73 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NoxKel Gaming Platform</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css?v=1.0">
+    <title>NoxKel RPG</title>
+    <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 </head>
 <body>
-
-    <div id="auth-box" class="platform-card">
-        <h1 class="brand-title">NOXKEL</h1>
-        <p class="brand-subtitle">Central Authentication Core</p>
-        <div class="input-group">
-            <input type="text" id="username" placeholder="Username" autocomplete="off">
-            <input type="password" id="password" placeholder="Password">
-        </div>
-        <div class="button-row">
-            <button class="btn btn-secondary" onclick="sendAuth('signup')">Sign Up</button>
-            <button class="btn btn-primary" onclick="sendAuth('login')">Login</button>
-        </div>
+    <div id="auth-box">
+        <h2>NoxKel Login</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="sendAuth('signup')">Sign Up</button>
+        <button onclick="sendAuth('login')">Login</button>
     </div>
 
-    <div id="game-hub" class="dashboard-layout" style="display:none;">
-        <header class="platform-header">
-            <div class="logo-area">NOXKEL<span>PLATFORM</span></div>
-            <div class="server-badge"><span class="status-dot"></span> Server: Online</div>
-        </header>
-
-        <main class="game-showcase-container">
-            <div class="game-banner-art">
-                <div class="banner-overlay-gradient"></div>
-                <div class="banner-content-title">Town RPG: Zone Arena</div>
-            </div>
-
-            <div class="game-meta-panel">
-                <h2 class="game-title">Town RPG: Zone Arena</h2>
-                <p class="developer-tag">By <strong>NoxKel Studios</strong></p>
-                
-                <hr class="panel-divider">
-
-                <p class="game-description">
-                    Drop directly into a high-stakes, real-time tactical city combat zone. 
-                    Scavenge asphalt grid layouts, establish critical defense points in open plains, 
-                    and drop heavy brown-brick bunker fortifications dynamically to hold the line.
-                </p>
-
-                <div class="platform-stats-grid">
-                    <div class="stat-box"><strong>Active</strong><span>1,204 Players</span></div>
-                    <div class="stat-box"><strong>Version</strong><span>v0.4.2 Deployed</span></div>
-                    <div class="stat-box"><strong>Server Tick</strong><span>60 Hz High-Rate</span></div>
-                </div>
-
-                <button class="btn-play-launch" onclick="pressJoinButton()">
-                    <span class="play-icon">▶</span> PLAY
-                </button>
-            </div>
-        </main>
-    </div>
-
-    <div id="game-ui" class="arena-layout" style="display:none;">
-        <div class="arena-controls-bar">
-            <h2>Town RPG: Operational Sandbox</h2>
-            <button class="btn btn-danger" onclick="teleportToSpawn()">🚨 STUCK RECOVERY RESPAWN</button>
-        </div>
+    <div id="game-ui" style="display:none;">
+        <h1>Welcome to the Game!</h1>
         <div id="phaser-game"></div> 
     </div>
 
-    <script src="/game.js?v=1.0"></script>
+    <script src="game.js"></script>
 </body>
 </html>
