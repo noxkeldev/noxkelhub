@@ -30,7 +30,7 @@
             overflow: hidden;
         }
 
-        /* PLATFORM ENTRY GATE (LOGIN) */
+        /* LOGIN PORTAL */
         .platform-card {
             background-color: var(--bg-card);
             border: 2px solid #2f3e46;
@@ -79,7 +79,7 @@
         .btn-secondary { background: #343a40; color: #fff; }
         .btn-danger { background: #dc3545; color: #fff; padding: 8px 16px; }
 
-        /* MULTI-GAME MENU HUB */
+        /* MENU HUB */
         .dashboard-layout {
             width: 100vw;
             height: 100vh;
@@ -97,6 +97,7 @@
         }
         .logo-area { font-family: 'Orbitron', sans-serif; font-size: 26px; }
         .logo-area span { color: var(--brand-neon); font-size: 14px; margin-left: 8px; }
+        .logout-link { color: #ff4d4d; cursor: pointer; font-size: 14px; font-weight: 600; }
 
         .game-container {
             display: grid;
@@ -145,7 +146,7 @@
         }
         .btn-play:hover { background: var(--roblox-green-hover); }
 
-        /* GAME SCREEN CONTEXT */
+        /* GAME SCREEN VIEWPORT */
         .arena-layout {
             width: 100vw;
             height: 100vh;
@@ -167,7 +168,7 @@
 </head>
 <body>
 
-    <div id="auth-box" class="platform-card">
+    <div id="auth-box" class="platform-card" style="display:none;">
         <h1 class="brand-title">NOXKEL</h1>
         <p class="brand-subtitle">Central Authentication Core</p>
         <div class="input-group">
@@ -183,7 +184,8 @@
     <div id="game-hub" class="dashboard-layout" style="display:none;">
         <header class="platform-header">
             <div class="logo-area">NOXKEL<span>STUDIOS</span></div>
-            <div id="live-counter" style="color: var(--brand-neon); font-weight: bold;">Players Online: Loading...</div>
+            <div id="live-counter" style="color: var(--brand-neon); font-weight: bold;">Players Online: ...</div>
+            <div class="logout-link" onclick="logoutSession()">Logout Account</div>
         </header>
 
         <div class="game-container">
@@ -194,7 +196,7 @@
                 
                 <div class="stats-row">
                     <div class="stat-card"><strong>ACTIVE PLAYERS</strong><span id="hub-pop">1,482</span></div>
-                    <div class="stat-card"><strong>VERSION</strong><span>v0.5.0-Alpha</span></div>
+                    <div class="stat-card"><strong>VERSION</strong><span>v0.5.5-Alpha</span></div>
                 </div>
 
                 <button class="btn-play" onclick="launchGame()">▶ PLAY</button>
