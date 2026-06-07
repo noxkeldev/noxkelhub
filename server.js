@@ -8,7 +8,7 @@ const app = express();
 // 2. MIDDLE: Connect to DB
 mongoose.connect('mongodb+srv://sweetcafw:BLACKPINK%40LISA@cluster0.oxbhatm.mongodb.net/?appName=Cluster0');
 
-// 3. MIDDLE: Define Schema & Model (After mongoose is loaded)
+// 3. MIDDLE: Define Schema & Model
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -25,22 +25,40 @@ app.use(session({
     saveUninitialized: false
 }));
 
+// 5. NEW: Authentication Route (Handles Login & Signup)
+app.post('/auth', async (req, res) => {
+    const { type, username, password } = req.body;
+
+    if (type === 'signup') {
+        try {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await User.create({ username, password: hashedPassword });
+            res.json({ success: true });
+        } catch (err) {
+            res.json({ success: false, message: "Username taken!" });
+        }
+    } else {
+        const user = await User.findOne({ username });
+        if (user && await bcrypt.compare(password, user.password)) {
+            req.session.user = username; // This logs you in
+            res.json({ success: true });
+        } else {
+            res.json({ success: false, message: "Invalid credentials" });
+        }
+    }
+});
+
+// 6. Admin Command Route
 app.post('/admin-command', async (req, res) => {
     const { command } = req.body;
     
-    // Fixed: 'sweetcafw' is now in quotes!
     if (req.session.user !== 'sweetcafw') {
-        return res.status(403).send("Nice try!");
+        return res.status(403).json({ success: false, message: "Nice try!" });
     }
 
     const parts = command.split(' ');
-    
     if (parts[0] === '/give') {
-        const target = parts[1];
-        const item = parts[2];
-        
-        await User.updateOne({ username: target }, { $push: { inventory: item } });
-        console.log(`Gave ${item} to ${target}`);
+        await User.updateOne({ username: parts[1] }, { $push: { inventory: parts[2] } });
         res.json({ success: true });
     }
 });
