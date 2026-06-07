@@ -17,3 +17,18 @@ async function sendAuth(type) {
         alert("Failed to authenticate!");
     }
 }
+// Add this at the bottom of your game.js
+window.addEventListener('keydown', async (e) => {
+    if (e.key === '/') {
+        const cmd = prompt("Enter Admin Command:");
+        if (cmd) {
+            const res = await fetch('/admin-command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: cmd })
+            });
+            const data = await res.json();
+            alert(data.success ? "Command Executed!" : "Failed!");
+        }
+    }
+});
