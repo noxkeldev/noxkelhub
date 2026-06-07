@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <div id="auth-box">
+        <h2>NoxKel Login</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="sendAuth('signup')">Sign Up</button>
+        <button onclick="sendAuth('login')">Login</button>
+    </div>
+
+    <div id="game-ui" style="display:none;">
+        <h1>Welcome to the Game!</h1>
+        <canvas id="gameCanvas" width="800" height="600" style="border: 1px solid #fff;"></canvas>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
