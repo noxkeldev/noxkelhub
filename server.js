@@ -1,5 +1,6 @@
 // 1. TOP: Always import everything first
 const express = require('express');
+const path = require('path');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
