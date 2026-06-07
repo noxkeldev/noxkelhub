@@ -1,21 +1,288 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>NoxKel RPG</title>
-    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoxKel Gaming Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    
+    <style>
+        /* BRAND PLATFORM CORE STYLES */
+        :root {
+            --bg-darkest: #0b0c10;
+            --bg-card: #1f2833;
+            --brand-neon: #45f3ff;
+            --roblox-green: #28a745;
+            --roblox-green-hover: #218838;
+            --text-primary: #ffffff;
+            --text-muted: #8892b0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-darkest);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* 1. AUTH CARD (LOGIN) */
+        .platform-card {
+            background-color: var(--bg-card);
+            border: 2px solid #2f3e46;
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        }
+        .brand-title {
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 4px;
+            color: var(--brand-neon);
+            font-size: 36px;
+            margin-bottom: 5px;
+        }
+        .brand-subtitle {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 15px;
+            background: #0f141c;
+            border: 1px solid #343a40;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+        }
+        .button-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        /* BUTTON GENERICS */
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn-primary { background: var(--brand-neon); color: #000; }
+        .btn-secondary { background: #343a40; color: #fff; }
+        .btn-danger { background: #dc3545; color: #fff; padding: 8px 16px; font-size: 12px; }
+
+        /* 2. ROBLOX STYLE GAME DASHBOARD HUB */
+        .dashboard-layout {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: #12161a;
+            padding: 30px 60px;
+        }
+        .platform-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #232931;
+        }
+        .logo-area {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 26px;
+            color: #fff;
+        }
+        .logo-area span {
+            color: var(--brand-neon);
+            font-size: 14px;
+            margin-left: 8px;
+        }
+        .server-badge {
+            background: #1c232b;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #28a745;
+            border-radius: 50%;
+        }
+
+        .game-showcase-container {
+            display: grid;
+            grid-template-columns: 1.25fr 1fr;
+            gap: 40px;
+            margin-top: 40px;
+            flex: 1;
+        }
+        .game-banner-art {
+            background: #1c232b url('assets/tileset.png') no-repeat center;
+            background-size: cover;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #2c3540;
+            display: flex;
+            align-items: flex-end;
+            padding: 40px;
+        }
+        .game-banner-art::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to top, rgba(18,22,26,1) 10%, rgba(0,0,0,0.3) 100%);
+        }
+        .banner-content-title {
+            font-size: 38px;
+            font-weight: 700;
+            font-family: 'Orbitron', sans-serif;
+            z-index: 2;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.8);
+        }
+        .game-meta-panel {
+            background: #1c232b;
+            border-radius: 12px;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #2c3540;
+        }
+        .game-title { font-size: 30px; margin-bottom: 5px; font-family: 'Orbitron', sans-serif; }
+        .developer-tag { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        .game-description { font-size: 15px; color: #b4bec9; line-height: 1.6; margin-bottom: 30px; }
+
+        .platform-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: auto;
+        }
+        .stat-box {
+            background: #12161a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #232931;
+        }
+        .stat-box strong { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; }
+
+        .btn-play-launch {
+            width: 100%;
+            background: var(--roblox-green);
+            color: white;
+            border: none;
+            padding: 22px;
+            font-size: 24px;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 8px 20px rgba(40,167,69,0.3);
+        }
+        .btn-play-launch:hover { background: var(--roblox-green-hover); transform: translateY(-2px); }
+
+        /* 3. ARENA INTERFACE RUNTIME */
+        .arena-layout {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            padding: 20px;
+        }
+        .arena-controls-bar {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+    </style>
 </head>
 <body>
-    <div id="auth-box">
-        <h2>NoxKel Login</h2>
-        <input type="text" id="username" placeholder="Username">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="sendAuth('signup')">Sign Up</button>
-        <button onclick="sendAuth('login')">Login</button>
+
+    <div id="auth-box" class="platform-card">
+        <h1 class="brand-title">NOXKEL</h1>
+        <p class="brand-subtitle">Central Authentication Core</p>
+        <div class="input-group">
+            <input type="text" id="username" placeholder="Username" autocomplete="off">
+            <input type="password" id="password" placeholder="Password">
+        </div>
+        <div class="button-row">
+            <button class="btn btn-secondary" onclick="sendAuth('signup')">Sign Up</button>
+            <button class="btn btn-primary" onclick="sendAuth('login')">Login</button>
+        </div>
     </div>
 
-    <div id="game-ui" style="display:none;">
-        <h1>Welcome to the Game!</h1>
+    <div id="game-hub" class="dashboard-layout" style="display:none;">
+        <header class="platform-header">
+            <div class="logo-area">NOXKEL<span>PLATFORM</span></div>
+            <div class="server-badge"><span class="status-dot"></span> Server: Online</div>
+        </header>
+
+        <main class="game-showcase-container">
+            <div class="game-banner-art">
+                <div class="banner-content-title">Town RPG: Zone Arena</div>
+            </div>
+
+            <div class="game-meta-panel">
+                <h2 class="game-title">Town RPG: Zone Arena</h2>
+                <p class="developer-tag">By <strong>NoxKel Studios</strong></p>
+                <p class="game-description">
+                    Drop directly into a high-stakes, real-time tactical city combat zone. 
+                    Scavenge asphalt grid layouts, establish critical defense points in open plains, 
+                    and build heavy brown-brick bunker fortifications dynamically to hold the line.
+                </p>
+
+                <div class="platform-stats-grid">
+                    <div class="stat-box"><strong>Active</strong><span>1,204 Players</span></div>
+                    <div class="stat-box"><strong>Version</strong><span>v0.4.2</span></div>
+                    <div class="stat-box"><strong>Server Tick</strong><span>60 Hz</span></div>
+                </div>
+
+                <button class="btn-play-launch" onclick="pressJoinButton()">
+                    ▶ PLAY
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <div id="game-ui" class="arena-layout" style="display:none;">
+        <div class="arena-controls-bar">
+            <h2>Town RPG: Operational Sandbox</h2>
+            <button class="btn btn-danger" onclick="teleportToSpawn()">🚨 STUCK RECOVERY RESPAWN</button>
+        </div>
         <div id="phaser-game"></div> 
     </div>
 
