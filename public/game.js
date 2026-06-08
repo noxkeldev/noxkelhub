@@ -116,15 +116,18 @@ function initGameEngine() {
     };
     phaserEngineInstance = new Phaser.Game(config);
 }
-preload() {
-    // Change frameWidth and frameHeight to 28
-    this.load.spritesheet('tileset', 'assets/MAPS/tilemap.png', { frameWidth: 16, frameHeight: 16 });
+
+// FIXED: Added the 'function' keyword back and targeted tileset.png
+function preload() {
+    this.load.image('player', 'assets/MAPS/player.png');
+    this.load.spritesheet('tileset', 'assets/MAPS/tileset.png', { frameWidth: 16, frameHeight: 16 });
 }
+
 function create() {
     this.solids = this.physics.add.staticGroup();
     this.ground = this.add.group();
 
-    // FIXED: Your sheet width is 458px. 458 / 16px per tile = ~28 tiles per row!
+    // Slicing parameters for a 448px image width
     const fixedTilesPerRow = 28; 
 
     for (let row = 0; row < mapLayout.length; row++) {
@@ -141,7 +144,6 @@ function create() {
             let x = col * 16;
             let y = row * 16;
             
-            // Cutting the spreadsheet columns with your exact 28 width factor
             let frameID = (tileConfig.indexY * fixedTilesPerRow) + tileConfig.indexX;
 
             if (tileConfig.solid) {
@@ -158,7 +160,6 @@ function create() {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.physics.add.collider(this.player, this.solids);
 
-    // --- SMOOTH SCROLLING VIEWPORT SETTINGS ---
     this.physics.world.setBounds(0, 0, 960, 384);
     this.cameras.main.setBounds(0, 0, 960, 384);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
