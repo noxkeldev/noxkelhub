@@ -118,7 +118,7 @@ function initGameEngine() {
 }
 preload() {
     // Change frameWidth and frameHeight to 28
-    this.load.spritesheet('tileset', 'assets/MAPS/tilemap.png', { frameWidth: 28, frameHeight: 28 });
+    this.load.spritesheet('tileset', 'assets/MAPS/tilemap.png', { frameWidth: 16, frameHeight: 16 });
 }
 function create() {
     this.solids = this.physics.add.staticGroup();
