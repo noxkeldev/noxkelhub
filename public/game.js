@@ -117,11 +117,12 @@ function initGameEngine() {
     phaserEngineInstance = new Phaser.Game(config);
 }
 
-// FIXED PRELOAD ASSET PATH ROUTING
 function preload() {
-    // FIXED: Directed paths to use MAPS/ folder and renamed file to tilemap.png!
+    // We remove the leading slash. 
+    // This tells the browser: "Look in the same folder I'm currently in"
     this.load.image('player', 'MAPS/player.png');
     this.load.spritesheet('tileset', 'MAPS/tilemap.png', { frameWidth: 16, frameHeight: 16 });
+}
     
     // Note: WEAPONS/ assets are mentally pinned here for when we build guns next!
 }
