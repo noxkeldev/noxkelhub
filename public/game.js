@@ -116,12 +116,10 @@ function initGameEngine() {
     };
     phaserEngineInstance = new Phaser.Game(config);
 }
-function preload() {
-    // If 'public' is the root, this path should resolve correctly:
-    this.load.image('player', 'assets/MAPS/player.png');
-    this.load.spritesheet('tileset', 'assets/MAPS/tileset.png', { frameWidth: 16, frameHeight: 16 });
+preload() {
+    // Change frameWidth and frameHeight to 28
+    this.load.spritesheet('tileset', 'assets/MAPS/tilemap.png', { frameWidth: 28, frameHeight: 28 });
 }
-
 function create() {
     this.solids = this.physics.add.staticGroup();
     this.ground = this.add.group();
