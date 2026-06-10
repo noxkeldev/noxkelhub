@@ -1,354 +1,173 @@
-const socket = io();
-
-let currentUsername = "";
-let currentServerId = "";
-let currentChannelName = "";
-let currentChannelId = ""; // Combined format: serverId-channelName
-let currentServerOwner = "";
-let authMode = "login";
-
-window.onload = function() {
-    const savedUser = localStorage.getItem("noxkel_user");
-    if (savedUser) {
-        currentUsername = savedUser;
-        initHubDeck(false); 
-    } else {
-        // CORRECTION GATEWAY: Forces login portal to display if no local token is stored
-        document.getElementById('auth-container').style.display = 'flex';
-        document.getElementById('app-container').style.display = 'none';
-    }
-
-    // Bind Enter key to chat transmitter input
-    document.getElementById('chat-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { transmitMessage(); }
-    });
-};
-
-// 1. OVERLAY UI CONTROL MOTOR FUNCTIONS
-function openModal(id) { document.getElementById(id).style.display = "flex"; }
-function closeModal(id) { document.getElementById(id).style.display = "none"; }
-
-function toggleCodeFieldDisplay() {
-    const type = document.getElementById('new-server-privacy-input').value;
-    const wrapper = document.getElementById('private-code-field-wrapper');
-    wrapper.style.display = (type === 'private') ? 'block' : 'none';
-}
-
-// 2. IDENTITY ENTRY GATEWAYS
-function toggleAuthMode() {
-    const title = document.getElementById('auth-title');
-    const submitBtn = document.querySelector('#auth-container button');
-    const toggleBtn = document.getElementById('toggle-auth');
-
-    if (authMode === "login") {
-        authMode = "signup";
-        title.innerText = "NOXKEL SIGNUP";
-        submitBtn.innerText = "Create Account";
-        toggleBtn.innerText = "Have an account? Log In";
-    } else {
-        authMode = "login";
-        title.innerText = "NOXKEL HUB";
-        submitBtn.innerText = "Connect";
-        toggleBtn.innerText = "Need an account? Sign Up";
-    }
-}
-
-async function handleAuth() {
-    const u = document.getElementById('username').value.trim();
-    const p = document.getElementById('password').value.trim();
-    if(!u || !p) return alert("Fill in missing string fields.");
-
-    const res = await fetch('/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: authMode, username: u, password: p })
-    });
-    const data = await res.json();
-    
-    if (data.success) {
-        currentUsername = u;
-        localStorage.setItem("noxkel_user", u);
-        initHubDeck(data.isNewUser); 
-    } else { alert(data.message || "Credential mapping error."); }
-}
-
-async function initHubDeck(isNewUser) {
-    document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('app-container').style.display = 'flex';
-    document.getElementById('my-display-username').innerText = `@${currentUsername}`;
-    
-    const res = await fetch(`/api/user/pfp/${currentUsername}`);
-    const d = await res.json();
-    document.getElementById('my-footer-avatar-img').src = d.pfp;
-
-    if (isNewUser) {
-        openModal('modal-global-invite');
-    } else {
-        loadServersRail();
-    }
-}
-
-async function acceptGlobalInvite() {
-    closeModal('modal-global-invite');
-    await fetch('/api/servers/join-global', { method: 'POST' });
-    loadServersRail();
-}
-
-// 3. SERVER OPERATIONS
-async function loadServersRail() {
-    const res = await fetch('/api/servers/my');
-    const servers = await res.json();
-    const rail = document.getElementById('dynamic-servers-rail');
-    rail.innerHTML = "";
-
-    servers.forEach(s => {
-        const btn = document.createElement('div');
-        btn.className = `srv-node ${currentServerId === s._id ? 'active' : ''}`;
-        btn.innerText = s.name.substring(0,2).toUpperCase();
-        btn.title = s.name;
-        btn.onclick = () => selectServerWorkspace(s, s.channels);
-        rail.appendChild(btn);
-    });
-
-    if (servers.length > 0 && !currentServerId) {
-        selectServerWorkspace(servers[0], servers[0].channels);
-    }
-}
-
-async function confirmCreateServer() {
-    const name = document.getElementById('new-server-name-input').value.trim();
-    const privacy = document.getElementById('new-server-privacy-input').value;
-    const code = document.getElementById('new-server-code-input').value.trim();
-
-    if(!name) return alert("Name field is mandatory.");
-    if(privacy === 'private' && !code) return alert("Private protocols require a key code.");
-
-    const res = await fetch('/api/servers/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, isPrivate: (privacy === 'private'), accessCode: code })
-    });
-    
-    if(res.ok) {
-        closeModal('modal-create-server');
-        document.getElementById('new-server-name-input').value = "";
-        document.getElementById('new-server-code-input').value = "";
-        loadServersRail();
-    }
-}
-
-async function confirmJoinByCode() {
-    const code = document.getElementById('join-code-input').value.trim();
-    if(!code) return alert("Please supply an access code.");
-
-    const res = await fetch('/api/servers/join-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-    });
-    const data = await res.json();
-    
-    if(data.success) {
-        closeModal('modal-join-code');
-        document.getElementById('join-code-input').value = "";
-        currentServerId = data.server._id;
-        loadServersRail();
-    } else { alert(data.message); }
-}
-
-function selectServerWorkspace(serverObj, channels) {
-    currentServerId = serverObj._id;
-    currentServerOwner = serverObj.owner;
-    document.getElementById('active-server-title').innerText = serverObj.name;
-    
-    const isAdmin = (currentServerOwner === currentUsername);
-    document.getElementById('add-room-sidebar-btn').style.display = isAdmin ? "inline" : "none";
-    document.getElementById('rules-mod-btn').style.display = isAdmin ? "block" : "none";
-
-    document.querySelectorAll('.srv-node').forEach(n => {
-        if(n.title === serverObj.name) n.classList.add('active');
-        else n.classList.remove('active');
-    });
-
-    const list = document.getElementById('active-channels-list');
-    list.innerHTML = "";
-
-    channels.forEach((ch, idx) => {
-        const item = document.createElement('div');
-        item.className = `ch-item ${idx === 0 ? 'active' : ''}`;
-        item.innerText = `# ${ch.name}`;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noxkel Hub</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; }
+        body { background-color: #050505; color: #00ff00; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
         
-        if (ch.isReadOnly) {
-            const badge = document.createElement('span');
-            badge.className = "badge-readonly";
-            badge.innerText = "NOTICE";
-            item.appendChild(badge);
-        }
+        /* AUTH MATRIX LAYOUT */
+        #auth-container { display: flex; flex-direction: column; background: #0a0a0a; border: 2px solid #00ff00; padding: 30px; border-radius: 8px; width: 350px; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2); }
+        #auth-container h2 { text-align: center; margin-bottom: 20px; font-size: 1.5rem; letter-spacing: 2px; }
+        #auth-container input { background: #000; border: 1px solid #00ff00; color: #00ff00; padding: 10px; margin-bottom: 15px; border-radius: 4px; outline: none; }
+        #auth-container button { background: #00ff00; color: #000; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 4px; letter-spacing: 1px; }
+        #auth-container p { text-align: center; margin-top: 15px; font-size: 0.8rem; cursor: pointer; text-decoration: underline; }
 
-        item.onclick = () => {
-            document.querySelectorAll('.ch-item').forEach(c => c.classList.remove('active'));
-            item.classList.add('active');
-            targetChannelStream(ch);
-        };
-        list.appendChild(item);
-    });
+        /* MAIN APP CONSOLE LAYOUT */
+        #app-container { display: none; width: 100vw; height: 100vh; }
+        .rail { width: 70px; background: #000; border-right: 1px solid #111; display: flex; flex-direction: column; align-items: center; padding-top: 15px; gap: 10px; }
+        .srv-node { width: 50px; height: 50px; background: #0a0a0a; border: 1px solid #00ff00; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
+        .srv-node.active, .srv-node:hover { background: #00ff00; color: #000; box-shadow: 0 0 10px #00ff00; }
+        .sidebar { width: 240px; background: #0a0a0a; border-right: 1px solid #111; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 15px; border-bottom: 1px solid #111; display: flex; justify-content: space-between; align-items: center; }
+        .channels-wrapper { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .ch-item { padding: 8px 12px; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+        .ch-item.active, .ch-item:hover { background: rgba(0, 255, 0, 0.1); }
+        .badge-readonly { background: #ff0055; color: #fff; font-size: 0.6rem; padding: 2px 6px; border-radius: 3px; font-weight: bold; }
+        .sidebar-footer { padding: 15px; border-top: 1px solid #111; display: flex; align-items: center; gap: 10px; background: #000; }
+        .my-avatar { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #00ff00; cursor: pointer; }
+        .main-chat-deck { flex: 1; background: #050505; display: flex; flex-direction: column; }
+        .chat-header { padding: 15px; border-bottom: 1px solid #111; font-weight: bold; letter-spacing: 1px; }
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .msg-line { display: flex; gap: 12px; align-items: flex-start; }
+        .msg-avatar { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #333; }
+        .msg-info { display: flex; flex-direction: column; gap: 4px; }
+        .msg-user { font-weight: bold; font-size: 0.85rem; color: #888; }
+        .msg-text { font-size: 0.95rem; word-break: break-all; color: #dfdfdf; }
+        .chat-input-bar { padding: 20px; border-top: 1px solid #111; display: flex; gap: 10px; background: #000; }
+        .chat-input-bar input { flex: 1; background: #050505; border: 1px solid #00ff00; color: #00ff00; padding: 12px; border-radius: 4px; outline: none; }
+        
+        /* SYSTEM CORE MODALS */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); justify-content: center; align-items: center; z-index: 999; }
+        .modal-card { background: #0a0a0a; border: 2px solid #00ff00; width: 400px; padding: 25px; border-radius: 6px; display: flex; flex-direction: column; gap: 15px; }
+        .modal-card h3 { font-size: 1.1rem; border-bottom: 1px solid #111; padding-bottom: 10px; letter-spacing: 1px; }
+        .modal-card input, .modal-card select { background: #000; border: 1px solid #00ff00; color: #00ff00; padding: 10px; border-radius: 4px; outline: none; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+        .modal-actions button { padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; background: none; color: #00ff00; border: 1px solid #00ff00; }
+        .modal-actions button.primary { background: #00ff00; color: #000; border: none; }
+        .action-icon { cursor: pointer; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
 
-    if (channels.length > 0) targetChannelStream(channels[0]);
-}
+    <div id="auth-container">
+        <h2 id="auth-title">NOXKEL HUB</h2>
+        <input type="text" id="username" placeholder="Username Handle">
+        <input type="password" id="password" placeholder="Passcode Security">
+        <button onclick="handleAuth()">Connect</button>
+        <p id="toggle-auth" onclick="toggleAuthMode()">Need an account? Sign Up</p>
+    </div>
 
-// 4. CHANNELS & CHANNEL LOGIC
-async function confirmAddRoomChannel() {
-    const roomName = document.getElementById('new-room-name-input').value.trim();
-    const type = document.getElementById('new-room-type-input').value;
-
-    if(!roomName) return alert("Room identification label required.");
-
-    const res = await fetch('/api/channels/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            serverId: currentServerId,
-            roomName,
-            isReadOnly: (type === 'readonly')
-        })
-    });
-    
-    if(res.ok) {
-        closeModal('modal-add-room');
-        document.getElementById('new-room-name-input').value = "";
-        const refreshRes = await fetch('/api/servers/my');
-        const workspaces = await refreshRes.json();
-        const activeSrv = workspaces.find(w => w._id === currentServerId);
-        selectServerWorkspace(activeSrv, activeSrv.channels);
-    }
-}
-
-async function targetChannelStream(channelObj) {
-    currentChannelName = channelObj.name;
-    currentChannelId = `${currentServerId}-${channelObj.name}`;
-    document.getElementById('active-channel-title').innerText = `# ${channelObj.name}`;
-    
-    const inputField = document.getElementById('chat-input');
-    if (channelObj.isReadOnly && currentServerOwner !== currentUsername) {
-        inputField.disabled = true;
-        inputField.placeholder = "[READ ONLY — NOTICES CHANNEL]";
-    } else {
-        inputField.disabled = false;
-        inputField.placeholder = "Broadcast string packet...";
-    }
-
-    socket.emit('join_channel', currentChannelId);
-
-    const res = await fetch(`/api/messages/${currentChannelId}`);
-    const history = await res.json();
-    
-    const scroller = document.getElementById('chat-scroller');
-    scroller.innerHTML = "";
-
-    for (const msg of history) {
-        const pfpRes = await fetch(`/api/user/pfp/${msg.username}`);
-        const pfpData = await pfpRes.json();
-        renderMessageRow(msg, pfpData.pfp);
-    }
-}
-
-// 5. CHAT MESSAGING SYSTEMS
-async function transmitMessage() {
-    const input = document.getElementById('chat-input');
-    const val = input.value.trim();
-    if(!val) return;
-
-    socket.emit('send_chat_message', {
-        serverId: currentServerId,
-        channelId: currentChannelId,
-        channelName: currentChannelName,
-        username: currentUsername,
-        text: val
-    });
-    input.value = "";
-}
-
-function renderMessageRow(msg, avatarUrl) {
-    const scroller = document.getElementById('chat-scroller');
-    const row = document.createElement('div');
-    row.className = "msg-line";
-    
-    row.innerHTML = `
-        <img src="${avatarUrl}" class="msg-avatar">
-        <div class="msg-info">
-            <span class="msg-user">@${msg.username}</span>
-            <span class="msg-text">${msg.text}</span>
+    <div id="app-container">
+        <div class="rail">
+            <div class="srv-node" onclick="openModal('modal-create-server')" title="Create Workspace" style="border-style: dashed;">+</div>
+            <div class="srv-node" onclick="openModal('modal-join-code')" title="Join via Access Code" style="border-style: dashed;">#</div>
+            <div id="dynamic-servers-rail" style="display: flex; flex-direction: column; gap: 10px;"></div>
         </div>
-    `;
-    scroller.appendChild(row);
-    scroller.scrollTop = scroller.scrollHeight;
-}
 
-// 6. UTILITY MANAGEMENT MODALS (AUTOMOD/PFP)
-function openAutoModConfigModal() { openModal('modal-automod'); }
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span id="active-server-title">No Server</span>
+                <span id="add-room-sidebar-btn" class="action-icon" onclick="openModal('modal-add-room')" style="display: none;">+</span>
+            </div>
+            <div class="channels-wrapper" id="active-channels-list"></div>
+            <div class="sidebar-footer">
+                <img src="" id="my-footer-avatar-img" class="my-avatar" onclick="openModal('modal-user-pfp')">
+                <span id="my-display-username">@user</span>
+                <button id="rules-mod-btn" onclick="openAutoModConfigModal()" style="display:none; background:none; border:1px solid #ff0055; color:#ff0055; padding:2px 6px; font-size:0.7rem; cursor:pointer; margin-left:auto; border-radius:3px;">MOD</button>
+            </div>
+        </div>
 
-async function confirmAutoModRules() {
-    const words = document.getElementById('automod-words-input').value.trim();
-    
-    const res = await fetch('/api/servers/automod', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: currentServerId, words })
-    });
-    const d = await res.json();
-    if(d.success) {
-        closeModal('modal-automod');
-        alert("AutoMod parameters injected successfully.");
-    }
-}
+        <div class="main-chat-deck">
+            <div class="chat-header" id="active-channel-title"># welcome</div>
+            <div class="chat-messages" id="chat-scroller"></div>
+            <div class="chat-input-bar">
+                <input type="text" id="chat-input" placeholder="Broadcast string packet...">
+                <button onclick="transmitMessage()" style="background:#00ff00; color:#000; border:none; padding:0 20px; font-weight:bold; border-radius:4px; cursor:pointer;">Send</button>
+            </div>
+        </div>
+    </div>
 
-async function confirmPfpUpdate() {
-    const url = document.getElementById('user-pfp-url-input').value.trim();
-    if(!url) return;
+    <div id="modal-global-invite" class="modal-overlay">
+        <div class="modal-card">
+            <h3>🌐 INCOMING TRANSMISSION</h3>
+            <p>Welcome to Noxkel Hub. You have been automatically invited to establish a secure link to the global mainframe node.</p>
+            <div class="modal-actions">
+                <button class="primary" onclick="acceptGlobalInvite()">Accept Mainframe Sync</button>
+            </div>
+        </div>
+    </div>
 
-    const res = await fetch('/api/profile/pfp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pfp: url })
-    });
-    if(res.ok) {
-        closeModal('modal-user-pfp');
-        document.getElementById('my-footer-avatar-img').src = url;
-        alert("Avatar asset synchronized.");
-    }
-}
+    <div id="modal-create-server" class="modal-overlay">
+        <div class="modal-card">
+            <h3>🛠️ CONSTRUCT NEW MAINBOARD</h3>
+            <input type="text" id="new-server-name-input" placeholder="Server Name">
+            <select id="new-server-privacy-input" onchange="toggleCodeFieldDisplay()">
+                <option value="public">Public Node (Discoverable)</option>
+                <option value="private">Private Network (Encryption Lock)</option>
+            </select>
+            <div id="private-code-field-wrapper" style="display: none; flex-direction: column;">
+                <input type="text" id="new-server-code-input" placeholder="Establish Private Access Code">
+            </div>
+            <div class="modal-actions">
+                <button onclick="closeModal('modal-create-server')">Abort</button>
+                <button class="primary" onclick="confirmCreateServer()">Build Node</button>
+            </div>
+        </div>
+    </div>
 
-// 7. LISTENING MATRIX INTERCEPTORS
-socket.on('receive_chat_message', (msg) => {
-    if (msg.channelId === currentChannelId) {
-        renderMessageRow(msg, msg.pfp || "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel");
-    }
-});
+    <div id="modal-join-code" class="modal-overlay">
+        <div class="modal-card">
+            <h3>🔑 LINK SECURE ACCESS KEY</h3>
+            <input type="text" id="join-code-input" placeholder="Enter Access Code Pattern">
+            <div class="modal-actions">
+                <button onclick="closeModal('modal-join-code')">Cancel</button>
+                <button class="primary" onclick="confirmJoinByCode()">Verify & Join</button>
+            </div>
+        </div>
+    </div>
 
-socket.on('mod_action', (action) => {
-    alert(action.text);
-    
-    if(action.type === 'temp_mute') {
-        const inputField = document.getElementById('chat-input');
-        inputField.disabled = true;
-        let timeRemaining = action.minutes * 60;
+    <div id="modal-add-room" class="modal-overlay">
+        <div class="modal-card">
+            <h3>📡 ADD ROOM SECTOR</h3>
+            <input type="text" id="new-room-name-input" placeholder="room-name">
+            <select id="new-room-type-input">
+                <option value="standard">Standard Text Room (Open Stream)</option>
+                <option value="readonly">Announcement Board (Read-Only Matrix)</option>
+            </select>
+            <div class="modal-actions">
+                <button onclick="closeModal('modal-add-room')">Cancel</button>
+                <button class="primary" onclick="confirmAddRoomChannel()">Deploy Room</button>
+            </div>
+        </div>
+    </div>
 
-        const countdown = setInterval(() => {
-            timeRemaining--;
-            let mins = Math.floor(timeRemaining / 60);
-            let secs = timeRemaining % 60;
-            inputField.placeholder = `[MUTED — VIOLATION DETECTED: ${mins}m ${secs}s]`;
+    <div id="modal-automod" class="modal-overlay">
+        <div class="modal-card">
+            <h3>🤖 CONFIGURE AUTOMOD ALGORITHMS</h3>
+            <p style="font-size: 0.75rem; color: #888;">Enter restricted keywords separated by commas. Multi-strike triggers activate automated 10-minute lockouts.</p>
+            <input type="text" id="automod-words-input" placeholder="spam, exploit, swearword">
+            <div class="modal-actions">
+                <button onclick="closeModal('modal-automod')">Close</button>
+                <button class="primary" onclick="confirmAutoModRules()">Inject Parameters</button>
+            </div>
+        </div>
+    </div>
 
-            if (timeRemaining <= 0) {
-                clearInterval(countdown);
-                inputField.disabled = false;
-                inputField.placeholder = "Broadcast string packet...";
-            }
-        }, 1000);
-    }
+    <div id="modal-user-pfp" class="modal-overlay">
+        <div class="modal-card">
+            <h3>🖼️ SYNCHRONIZE AVATAR ASSET</h3>
+            <input type="text" id="user-pfp-url-input" placeholder="Paste direct image URL string">
+            <div class="modal-actions">
+                <button onclick="closeModal('modal-user-pfp')">Cancel</button>
+                <button class="primary" onclick="confirmPfpUpdate()">Sync Asset</button>
+            </div>
+        </div>
+    </div>
 
-    if(action.type === 'perma_mute') {
-        document.getElementById('chat-input').disabled = true;
-        document.getElementById('chat-input').placeholder = "[LOCKED - PERMANENT BAN/MUTE ACTIVE]";
-    }
-});
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/chat.js"></script>
+</body>
+</html>
