@@ -62,33 +62,42 @@ app.post('/auth', async (req, res) => {
 
 app.post('/api/servers/join-global', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
-    let globalSrv = await ChatServer.findOne({ owner: 'sweetcafw', name: 'Global Network' });
-    if (!globalSrv) {
-        globalSrv = await ChatServer.create({
-            name: 'Global Network', owner: 'sweetcafw', isPrivate: false,
-            channels: [{ name: 'lounge', isReadOnly: false }, { name: 'announcements', isReadOnly: true }]
-        });
+    try {
+        let globalSrv = await ChatServer.findOne({ owner: 'sweetcafw', name: 'Global Network' });
+        if (!globalSrv) {
+            globalSrv = await ChatServer.create({
+                name: 'Global Network', owner: 'sweetcafw', isPrivate: false,
+                channels: [{ name: 'lounge', isReadOnly: false }, { name: 'announcements', isReadOnly: true }]
+            });
+        }
+        await User.updateOne({ username: req.session.user }, { $addToSet: { servers: globalSrv._id.toString() } });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
-    await User.updateOne({ username: req.session.user }, { $addToSet: { servers: globalSrv._id.toString() } });
-    res.json({ success: true });
 });
 
 app.get('/api/servers/my', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const user = await User.findOne({ username: req.session.user });
-    if (!user) return res.json([]);
+    if (!user || !user.servers) return res.json([]);
     res.json(await ChatServer.find({ _id: { $in: user.servers } }));
 });
 
 app.post('/api/servers/create', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
-    const { name, isPrivate, accessCode } = req.body;
-    const newServer = await ChatServer.create({
-        name: name.trim(), owner: req.session.user, isPrivate,
-        accessCode: isPrivate ? accessCode.trim() : "", channels: [{ name: 'lounge', isReadOnly: false }]
-    });
-    await User.updateOne({ username: req.session.user }, { $addToSet: { servers: newServer._id.toString() } });
-    res.json(newServer);
+    try {
+        const { name, isPrivate, accessCode } = req.body;
+        const newServer = await ChatServer.create({
+            name: name.trim(), owner: req.session.user, isPrivate,
+            accessCode: isPrivate ? accessCode.trim() : "", channels: [{ name: 'lounge', isReadOnly: false }]
+        });
+        await User.updateOne({ username: req.session.user }, { $addToSet: { servers: newServer._id.toString() } });
+        // FIXED RESPONSE PACKET RULE
+        res.status(200).json(newServer);
+    } catch (err) {
+        res.status(500).json({ error: "Creation stream intercept crash." });
+    }
 });
 
 app.post('/api/servers/join-code', async (req, res) => {
