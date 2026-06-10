@@ -44,7 +44,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({ secret: 'super-secret-key', resave: false, saveUninitialized: false }));
 
 // Link externalized endpoints router file
-const apiRoutes = require('./routes');
+const apiRoutes = require('./route');
 app.use('/', apiRoutes);
 
 // REAL-TIME WEBSOCKET MODERATION LOGIC
