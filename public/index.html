@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Clone Grid</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: #1e1f22;
+            color: #dbdee1;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- AUTH WINDOW STYLING --- */
+        #auth-container {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #313338;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+
+        .auth-box {
+            background: #2b2d31;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            width: 400px;
+            text-align: center;
+        }
+
+        .auth-box h2 { color: #f2f3f5; margin-bottom: 8px; }
+        .auth-box p { color: #b5bac1; font-size: 14px; margin-bottom: 20px; }
+        
+        .auth-box input {
+            width: 100%;
+            padding: 10px;
+            background: #1e1f22;
+            border: none;
+            border-radius: 4px;
+            color: #f2f3f5;
+            margin-bottom: 16px;
+            outline: none;
+        }
+
+        .auth-box button {
+            width: 100%;
+            padding: 12px;
+            background: #5865f2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .auth-box button:hover { background: #4752c4; }
+        .auth-box .secondary-btn { background: transparent; color: #b5bac1; text-decoration: underline; }
+
+        /* --- DISCORD APP LAYOUT GRID --- */
+        #app-container {
+            display: none; /* Shown after auth success */
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* 1. Left Rail: Servers icons */
+        .server-rail {
+            width: 72px;
+            background-color: #1e1f22;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 12px;
+            gap: 8px;
+        }
+
+        .server-icon {
+            width: 48px;
+            height: 48px;
+            background-color: #313338;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #dbdee1;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .server-icon:hover, .server-icon.active {
+            border-radius: 16px;
+            background-color: #5865f2;
+            color: white;
+        }
+        .add-server-btn { background-color: #313338; color: #23a55a; font-size: 24px; }
+        .add-server-btn:hover { background-color: #23a55a; color: white; }
+
+        /* 2. Middle Column: Channels List */
+        .channel-sidebar {
+            width: 240px;
+            background-color: #2b2d31;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .server-header {
+            height: 48px;
+            border-bottom: 1px solid #1f2023;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            font-weight: bold;
+            color: #f2f3f5;
+        }
+
+        .channel-list {
+            flex: 1;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow-y: auto;
+        }
+
+        .channel-item {
+            padding: 8px;
+            border-radius: 4px;
+            color: #949ba4;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .channel-item::before { content: "# "; font-size: 18px; margin-right: 6px; color: #80848e; }
+        .channel-item:hover, .channel-item.active {
+            background-color: #35373c;
+            color: #dbdee1;
+        }
+
+        .user-footer {
+            height: 52px;
+            background-color: #232428;
+            padding: 0 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .user-info { font-weight: bold; color: #f2f3f5; font-size: 14px; }
+        .logout-btn { background: transparent; border: none; color: #f23f43; cursor: pointer; font-size: 12px; }
+
+        /* 3. Main Column: Chat Streams Frame */
+        .chat-view {
+            flex: 1;
+            background-color: #313338;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            height: 48px;
+            border-bottom: 1px solid #26272b;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            font-weight: bold;
+            color: #f2f3f5;
+        }
+
+        .message-area {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .msg-bubble {
+            display: flex;
+            flex-direction: column;
+        }
+        .msg-meta { font-size: 14px; font-weight: bold; color: #f2f3f5; margin-bottom: 4px; }
+        .msg-meta span { font-size: 11px; color: #949ba4; margin-left: 8px; font-weight: normal; }
+        .msg-text { font-size: 15px; color: #dbdee1; word-break: break-word; user-select: text; }
+
+        .chat-input-container {
+            padding: 0 16px 24px 16px;
+            background-color: #313338;
+        }
+
+        .chat-input-wrapper {
+            background-color: #383a40;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+        }
+
+        .chat-input-wrapper input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #dbdee1;
+            font-size: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="auth-container">
+        <div class="auth-box">
+            <h2 id="auth-title">Welcome Back!</h2>
+            <p id="auth-subtitle">We're so excited to see you again!</p>
+            <input type="text" id="username" placeholder="Username" required>
+            <input type="password" id="password" placeholder="Password" required>
+            <button onclick="handleAuth()">Log In</button>
+            <button class="secondary-btn" id="toggle-auth" onclick="toggleAuthMode()">Need an account? Register</button>
+        </div>
+    </div>
+
+    <div id="app-container">
+        <div class="server-rail" id="server-rail">
+            <div class="server-icon active" onclick="selectServer('global', 'Global Network')">??</div>
+            <div class="server-icon add-server-btn" onclick="createNewServer()">+</div>
+        </div>
+
+        <div class="channel-sidebar">
+            <div class="server-header" id="current-server-name">Global Network</div>
+            <div class="channel-list" id="channel-list">
+                <div class="channel-item active" onclick="selectChannel('general')">general</div>
+                <div class="channel-item" onclick="selectChannel('gaming')">gaming</div>
+            </div>
+            <div class="user-footer">
+                <div class="user-info" id="current-user-display">@User</div>
+                <button class="logout-btn" onclick="logout()">Log Out</button>
+            </div>
+        </div>
+
+        <div class="chat-view">
+            <div class="chat-header" id="current-channel-header"># general</div>
+            <div class="message-area" id="message-area">
+                </div>
+            <div class="chat-input-container">
+                <div class="chat-input-wrapper">
+                    <input type="text" id="chat-box" placeholder="Message #general" onkeydown="if(event.key === 'Enter') sendChatMessage()">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="chat.js"></script>
+</body>
+</html>
