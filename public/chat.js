@@ -1,219 +1,353 @@
-// 1. Initialize Real-Time Connection
 const socket = io();
 
-// State variables to track what the user is doing
 let currentUsername = "";
-let currentServerId = "global";
-let currentChannel = "general";
-let authMode = "login"; // can be 'login' or 'signup'
+let currentServerId = "";
+let currentChannelName = "";
+let currentChannelId = ""; // Combined format: serverId-channelName
+let currentServerOwner = "";
+let authMode = "login";
 
-// 2. CHECK SESSION ON LOAD
 window.onload = function() {
-    const savedUser = localStorage.getItem("chat_username");
+    const savedUser = localStorage.getItem("noxkel_user");
     if (savedUser) {
         currentUsername = savedUser;
-        enterApp();
+        initHubDeck(false); // don't show login invite on simple session reload
     }
 };
 
-// 3. AUTHENTICATION LOGIC (Login / Signup)
+// 1. OVERLAY UI CONTROL MOTOR FUNCTIONS
+function openModal(id) { document.getElementById(id).style.display = "flex"; }
+function closeModal(id) { document.getElementById(id).style.display = "none"; }
+
+function toggleCodeFieldDisplay() {
+    const type = document.getElementById('new-server-privacy-input').value;
+    const wrapper = document.getElementById('private-code-field-wrapper');
+    wrapper.style.display = (type === 'private') ? 'block' : 'none';
+}
+
+// 2. IDENTITY ENTRY GATEWAYS
 function toggleAuthMode() {
     const title = document.getElementById('auth-title');
-    const subtitle = document.getElementById('auth-subtitle');
-    const toggleBtn = document.getElementById('toggle-auth');
     const submitBtn = document.querySelector('#auth-container button');
+    const toggleBtn = document.getElementById('toggle-auth');
 
     if (authMode === "login") {
         authMode = "signup";
-        title.innerText = "Create an Account";
-        subtitle.innerText = "Join the community today!";
-        submitBtn.innerText = "Sign Up";
-        toggleBtn.innerText = "Already have an account? Log In";
+        title.innerText = "NOXKEL SIGNUP";
+        submitBtn.innerText = "Create Account";
+        toggleBtn.innerText = "Have an account? Log In";
     } else {
         authMode = "login";
-        title.innerText = "Welcome Back!";
-        subtitle.innerText = "We're so excited to see you again!";
-        submitBtn.innerText = "Log In";
-        toggleBtn.innerText = "Need an account? Register";
+        title.innerText = "NOXKEL HUB";
+        submitBtn.innerText = "Connect";
+        toggleBtn.innerText = "Need an account? Sign Up";
     }
 }
 
 async function handleAuth() {
-    const userIn = document.getElementById('username').value.trim();
-    const passIn = document.getElementById('password').value.trim();
-
-    if (!userIn || !passIn) return alert("Please fill in all fields.");
+    const u = document.getElementById('username').value.trim();
+    const p = document.getElementById('password').value.trim();
+    if(!u || !p) return alert("Fill in missing string fields.");
 
     const res = await fetch('/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: authMode, username: userIn, password: passIn })
+        body: JSON.stringify({ type: authMode, username: u, password: p })
     });
-
     const data = await res.json();
     
     if (data.success) {
-        currentUsername = userIn;
-        localStorage.setItem("chat_username", userIn);
-        enterApp();
-    } else {
-        alert(data.message || "Authentication failed!");
-    }
+        currentUsername = u;
+        localStorage.setItem("noxkel_user", u);
+        initHubDeck(data.isNewUser); // Trigger global invite conditional check if brand new
+    } else { alert(data.message || "Credential mapping error."); }
 }
 
-// 4. ENTER APPLICATION DESK
-function enterApp() {
+async function initHubDeck(isNewUser) {
     document.getElementById('auth-container').style.display = 'none';
     document.getElementById('app-container').style.display = 'flex';
-    document.getElementById('current-user-display').innerText = `@${currentUsername}`;
+    document.getElementById('my-display-username').innerText = `@${currentUsername}`;
     
-    loadServers();
-    selectChannel('general'); // Join default channel
-}
+    // Core profile synchronization
+    const res = await fetch(`/api/user/pfp/${currentUsername}`);
+    const d = await res.json();
+    document.getElementById('my-footer-avatar-img').src = d.pfp;
 
-function logout() {
-    localStorage.removeItem("chat_username");
-    window.location.reload();
-}
-
-// 5. SERVER MANAGEMENT
-async function loadServers() {
-    const res = await fetch('/api/servers');
-    if (!res.ok) return;
-    const servers = await res.json();
-    
-    const rail = document.getElementById('server-rail');
-    // Clear out custom servers, keep Global and "+" button
-    rail.innerHTML = `
-        <div class="server-icon ${currentServerId === 'global' ? 'active' : ''}" onclick="selectServer('global', 'Global Network')">🌐</div>
-    `;
-    
-    servers.forEach(srv => {
-        const icon = document.createElement('div');
-        icon.className = `server-icon ${currentServerId === srv._id ? 'active' : ''}`;
-        icon.innerText = srv.name.substring(0, 2).toUpperCase();
-        icon.onclick = () => selectServer(srv._id, srv.name, srv.channels);
-        rail.appendChild(icon);
-    });
-    
-    // Put add button back at the bottom
-    const addBtn = document.createElement('div');
-    addBtn.className = "server-icon add-server-btn";
-    addBtn.innerText = "+";
-    addBtn.onclick = createNewServer;
-    rail.appendChild(addBtn);
-}
-
-async function createNewServer() {
-    const name = prompt("Enter Server Name:");
-    if (!name || !name.trim()) return;
-
-    const res = await fetch('/api/servers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() })
-    });
-
-    if (res.ok) {
-        loadServers();
+    if (isNewUser) {
+        openModal('modal-global-invite');
+    } else {
+        loadServersRail();
     }
 }
 
-function selectServer(serverId, serverName, channels = ['general', 'gaming']) {
-    currentServerId = serverId;
-    document.getElementById('current-server-name').innerText = serverName;
-    
-    // Highlight correct server icon
-    loadServers();
+async function acceptGlobalInvite() {
+    closeModal('modal-global-invite');
+    await fetch('/api/servers/join-global', { method: 'POST' });
+    loadServersRail();
+}
 
-    // Render channels list for this server
-    const listContainer = document.getElementById('channel-list');
-    listContainer.innerHTML = "";
-    
-    channels.forEach((ch, idx) => {
-        const item = document.createElement('div');
-        item.className = `channel-item ${idx === 0 ? 'active' : ''}`;
-        item.innerText = ch;
-        item.onclick = () => {
-            // Remove active classes
-            document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
-            item.classList.add('active');
-            selectChannel(ch);
-        };
-        listContainer.appendChild(item);
+// 3. SERVER OPERATIONS
+async function loadServersRail() {
+    const res = await fetch('/api/servers/my');
+    const servers = await res.json();
+    const rail = document.getElementById('dynamic-servers-rail');
+    rail.innerHTML = "";
+
+    servers.forEach(s => {
+        const btn = document.createElement('div');
+        btn.className = `srv-node ${currentServerId === s._id ? 'active' : ''}`;
+        btn.innerText = s.name.substring(0,2).toUpperCase();
+        btn.title = s.name;
+        btn.onclick = () => selectServerWorkspace(s, s.channels);
+        rail.appendChild(btn);
     });
 
-    selectChannel(channels[0]);
+    if (servers.length > 0 && !currentServerId) {
+        selectServerWorkspace(servers[0], servers[0].channels);
+    }
 }
 
-// 6. CHANNEL & LIVE MESSAGING INFRASTRUCTURE
-async function selectChannel(channelName) {
-    // Unique room room ID combining server and channel names
-    currentChannel = `${currentServerId}-${channelName}`;
-    document.getElementById('current-channel-header').innerText = `# ${channelName}`;
-    document.getElementById('chat-box').placeholder = `Message #${channelName}`;
+async function confirmCreateServer() {
+    const name = document.getElementById('new-server-name-input').value.trim();
+    const privacy = document.getElementById('new-server-privacy-input').value;
+    const code = document.getElementById('new-server-code-input').value.trim();
 
-    // Tell Socket.io backend we are swapping channels
-    socket.emit('join_channel', currentChannel);
+    if(!name) return alert("Name field is mandatory.");
+    if(privacy === 'private' && !code) return alert("Private protocols require a key code.");
 
-    // Fetch message logs from MongoDB database
-    const res = await fetch(`/api/messages/${currentChannel}`);
-    const messages = await res.json();
+    const res = await fetch('/api/servers/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, isPrivate: (privacy === 'private'), accessCode: code })
+    });
     
-    const area = document.getElementById('message-area');
-    area.innerHTML = ""; // Clear view screen
-    
-    messages.forEach(msg => appendMessage(msg));
-    scrollToBottom();
+    if(res.ok) {
+        closeModal('modal-create-server');
+        // Reset inputs
+        document.getElementById('new-server-name-input').value = "";
+        document.getElementById('new-server-code-input').value = "";
+        loadServersRail();
+    }
 }
 
-function sendChatMessage() {
-    const box = document.getElementById('chat-box');
-    const text = box.value.trim();
-    if (!text) return;
+async function confirmJoinByCode() {
+    const code = document.getElementById('join-code-input').value.trim();
+    if(!code) return alert("Please supply an access code.");
 
-    // Package data to route across web sockets
-    const messagePackage = {
-        channelId: currentChannel,
+    const res = await fetch('/api/servers/join-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    
+    if(data.success) {
+        closeModal('modal-join-code');
+        document.getElementById('join-code-input').value = "";
+        currentServerId = data.server._id;
+        loadServersRail();
+    } else { alert(data.message); }
+}
+
+function selectServerWorkspace(serverObj, channels) {
+    currentServerId = serverObj._id;
+    currentServerOwner = serverObj.owner;
+    document.getElementById('active-server-title').innerText = serverObj.name;
+    
+    // Toggle Admin Control visibility states
+    const isAdmin = (currentServerOwner === currentUsername);
+    document.getElementById('add-room-sidebar-btn').style.display = isAdmin ? "inline" : "none";
+    document.getElementById('rules-mod-btn').style.display = isAdmin ? "block" : "none";
+
+    // Manage UI highlight circles
+    document.querySelectorAll('.srv-node').forEach(n => {
+        if(n.title === serverObj.name) n.classList.add('active');
+        else n.classList.remove('active');
+    });
+
+    const list = document.getElementById('active-channels-list');
+    list.innerHTML = "";
+
+    channels.forEach((ch, idx) => {
+        const item = document.createElement('div');
+        item.className = `ch-item ${idx === 0 ? 'active' : ''}`;
+        item.innerText = `# ${ch.name}`;
+        
+        if (ch.isReadOnly) {
+            const badge = document.createElement('span');
+            badge.className = "badge-readonly";
+            badge.innerText = "NOTICE";
+            item.appendChild(badge);
+        }
+
+        item.onclick = () => {
+            document.querySelectorAll('.ch-item').forEach(c => c.classList.remove('active'));
+            item.classList.add('active');
+            targetChannelStream(ch);
+        };
+        list.appendChild(item);
+    });
+
+    if (channels.length > 0) targetChannelStream(channels[0]);
+}
+
+// 4. CHANNELS & CHANNEL LOGIC
+async function confirmAddRoomChannel() {
+    const roomName = document.getElementById('new-room-name-input').value.trim();
+    const type = document.getElementById('new-room-type-input').value;
+
+    if(!roomName) return alert("Room identification label required.");
+
+    const res = await fetch('/api/channels/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            serverId: currentServerId,
+            roomName,
+            isReadOnly: (type === 'readonly')
+        })
+    });
+    
+    if(res.ok) {
+        closeModal('modal-add-room');
+        document.getElementById('new-room-name-input').value = "";
+        // Refresh active workspace structures
+        const refreshRes = await fetch('/api/servers/my');
+        const workspaces = await refreshRes.json();
+        const activeSrv = workspaces.find(w => w._id === currentServerId);
+        selectServerWorkspace(activeSrv, activeSrv.channels);
+    }
+}
+
+async function targetChannelStream(channelObj) {
+    currentChannelName = channelObj.name;
+    currentChannelId = `${currentServerId}-${channelObj.name}`;
+    document.getElementById('active-channel-title').innerText = `# ${channelObj.name}`;
+    
+    // Manage input lockdown rules for Read-Only Notice channels
+    const inputField = document.getElementById('chat-input');
+    if (channelObj.isReadOnly && currentServerOwner !== currentUsername) {
+        inputField.disabled = true;
+        inputField.placeholder = "[READ ONLY — NOTICES CHANNEL]";
+    } else {
+        inputField.disabled = false;
+        inputField.placeholder = "Broadcast string packet...";
+    }
+
+    socket.emit('join_channel', currentChannelId);
+
+    const res = await fetch(`/api/messages/${currentChannelId}`);
+    const history = await res.json();
+    
+    const scroller = document.getElementById('chat-scroller');
+    scroller.innerHTML = "";
+
+    for (const msg of history) {
+        const pfpRes = await fetch(`/api/user/pfp/${msg.username}`);
+        const pfpData = await pfpRes.json();
+        renderMessageRow(msg, pfpData.pfp);
+    }
+}
+
+// 5. CHAT MESSAGING SYSTEMS
+async function transmitMessage() {
+    const input = document.getElementById('chat-input');
+    const val = input.value.trim();
+    if(!val) return;
+
+    socket.emit('send_chat_message', {
+        serverId: currentServerId,
+        channelId: currentChannelId,
+        channelName: currentChannelName,
         username: currentUsername,
-        text: text
-    };
-
-    socket.emit('send_chat_message', messagePackage);
-    box.value = ""; // Clear input box
+        text: val
+    });
+    input.value = "";
 }
 
-// Append visual message bubble to screen array
-function appendMessage(msg) {
-    const area = document.getElementById('message-area');
+function renderMessageRow(msg, avatarUrl) {
+    const scroller = document.getElementById('chat-scroller');
+    const row = document.createElement('div');
+    row.className = "msg-line";
     
-    const bubble = document.createElement('div');
-    bubble.className = "msg-bubble";
-    
-    const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    bubble.innerHTML = `
-        <div class="msg-meta">${msg.username} <span>${timeStr}</span></div>
-        <div class="msg-text">${msg.text}</div>
+    row.innerHTML = `
+        <img src="${avatarUrl}" class="msg-avatar">
+        <div class="msg-info">
+            <span class="msg-user">@${msg.username}</span>
+            <span class="msg-text">${msg.text}</span>
+        </div>
     `;
+    scroller.appendChild(row);
+    scroller.scrollTop = scroller.scrollHeight;
+}
+
+// 6. UTILITY MANAGEMENT MODALS (AUTOMOD/PFP)
+function openAutoModConfigModal() {
+    openModal('modal-automod');
+}
+
+async function confirmAutoModRules() {
+    const words = document.getElementById('automod-words-input').value.trim();
     
-    area.appendChild(bubble);
-    scrollToBottom();
+    const res = await fetch('/api/servers/automod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId: currentServerId, words })
+    });
+    const d = await res.json();
+    if(d.success) {
+        closeModal('modal-automod');
+        alert("AutoMod parameters injected successfully.");
+    }
 }
 
-function scrollToBottom() {
-    const area = document.getElementById('message-area');
-    area.scrollTop = area.scrollHeight;
+async function confirmPfpUpdate() {
+    const url = document.getElementById('user-pfp-url-input').value.trim();
+    if(!url) return;
+
+    const res = await fetch('/api/profile/pfp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pfp: url })
+    });
+    if(res.ok) {
+        closeModal('modal-user-pfp');
+        document.getElementById('my-footer-avatar-img').src = url;
+        alert("Avatar asset synchronized.");
+    }
 }
 
-// 7. REAL-TIME SOCKET LISTENERS
+// 7. LISTENING MATRIX INTERCEPTORS
 socket.on('receive_chat_message', (msg) => {
-    // Only append to screen if the message belongs to the room the user is looking at
-    if (msg.channelId === currentChannel) {
-        appendMessage(msg);
+    if (msg.channelId === currentChannelId) {
+        renderMessageRow(msg, msg.pfp || "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel");
     }
 });
 
-socket.on('channel_cleared', () => {
-    document.getElementById('message-area').innerHTML = "";
+socket.on('mod_action', (action) => {
+    alert(action.text);
+    
+    if(action.type === 'temp_mute') {
+        const inputField = document.getElementById('chat-input');
+        inputField.disabled = true;
+        let timeRemaining = action.minutes * 60;
+
+        const countdown = setInterval(() => {
+            timeRemaining--;
+            let mins = Math.floor(timeRemaining / 60);
+            let secs = timeRemaining % 60;
+            inputField.placeholder = `[MUTED — VIOLATION DETECTED: ${mins}m ${secs}s]`;
+
+            if (timeRemaining <= 0) {
+                clearInterval(countdown);
+                inputField.disabled = false;
+                inputField.placeholder = "Broadcast string packet...";
+            }
+        }, 1000);
+    }
+
+    if(action.type === 'perma_mute') {
+        document.getElementById('chat-input').disabled = true;
+        document.getElementById('chat-input').placeholder = "[LOCKED - PERMANENT BAN/MUTE ACTIVE]";
+    }
 });
