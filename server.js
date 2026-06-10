@@ -9,9 +9,10 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// CONNECT TO CORE DATA GATEWAY
 mongoose.connect('mongodb+srv://sweetcafw:BLACKPINK%40LISA@cluster0.oxbhatm.mongodb.net/?appName=Cluster0');
 
-// DATABASE SCHEMAS DEFINITION
+// REGISTER MONGOOSE SCHEMAS (Must be top-level for both files)
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -19,7 +20,7 @@ const userSchema = new mongoose.Schema({
     servers: { type: Array, default: [] },
     modRecords: { type: Map, of: Object, default: {} }
 });
-const User = mongoose.model('User', userSchema);
+const User = mongoose.getModels().User || mongoose.model('User', userSchema);
 
 const serverSchema = new mongoose.Schema({
     name: { type: String, required: true },
@@ -29,7 +30,7 @@ const serverSchema = new mongoose.Schema({
     bannedWords: { type: Array, default: [] },
     channels: [{ name: { type: String, required: true }, isReadOnly: { type: Boolean, default: false } }]
 });
-const ChatServer = mongoose.model('ChatServer', serverSchema);
+const ChatServer = mongoose.getModels().ChatServer || mongoose.model('ChatServer', serverSchema);
 
 const messageSchema = new mongoose.Schema({
     channelId: { type: String, required: true },
@@ -39,15 +40,16 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model('Message', messageSchema);
 
+// MIDDLEWARE PIPELINES
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({ secret: 'super-secret-key', resave: false, saveUninitialized: false }));
 
-// Link externalized endpoints router file
+// MOUNT ROUTING MATRIX
 const apiRoutes = require('./route');
 app.use('/', apiRoutes);
 
-// REAL-TIME WEBSOCKET MODERATION LOGIC
+// LIVE PACKET STREAM CHANNELS (SOCKET.IO)
 io.on('connection', (socket) => {
     socket.on('join_channel', (channelId) => { socket.join(channelId); });
 
@@ -56,13 +58,16 @@ io.on('connection', (socket) => {
         const lowerText = text.toLowerCase();
 
         const currentServer = await ChatServer.findById(serverId);
-        const targetChannel = currentServer.channels.find(c => c.name === channelName);
+        if (!currentServer) return;
         
+        const targetChannel = currentServer.channels.find(c => c.name === channelName);
         if (targetChannel && targetChannel.isReadOnly && currentServer.owner !== username) {
             return socket.emit('mod_action', { type: 'error', text: "Transmission denied. This room is a Notice Board!" });
         }
 
         const sender = await User.findOne({ username });
+        if (!sender) return;
+        
         let record = sender.modRecords.get(serverId) || { warnings: 0, muteUntil: null, permaMuted: false };
 
         if (record.permaMuted) {
@@ -111,4 +116,5 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => console.log('Noxkel Engine listening on 3000'));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Noxkel Hub Running live on ports: ${PORT}`));
