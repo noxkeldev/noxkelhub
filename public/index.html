@@ -74,7 +74,7 @@
             </div>
             <div class="channels-wrapper" id="active-channels-list"></div>
             <div class="sidebar-footer">
-                <img src="" id="my-footer-avatar-img" class="my-avatar" onclick="openModal('modal-user-pfp')">
+                <img src="https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel" id="my-footer-avatar-img" class="my-avatar" onclick="openModal('modal-user-pfp')">
                 <span id="my-display-username">@user</span>
                 <button id="rules-mod-btn" onclick="openAutoModConfigModal()" style="display:none; background:none; border:1px solid #ff0055; color:#ff0055; padding:2px 6px; font-size:0.7rem; cursor:pointer; margin-left:auto; border-radius:3px;">MOD</button>
             </div>
@@ -108,8 +108,8 @@
                 <option value="public">Public Node (Discoverable)</option>
                 <option value="private">Private Network (Encryption Lock)</option>
             </select>
-            <div id="private-code-field-wrapper" style="display: none; flex-direction: column;">
-                <input type="text" id="new-server-code-input" placeholder="Establish Private Access Code">
+            <div id="private-code-field-wrapper" style="display: none;">
+                <input type="text" id="new-server-code-input" placeholder="Establish Private Access Code" style="margin-top: 15px; width: 100%;">
             </div>
             <div class="modal-actions">
                 <button onclick="closeModal('modal-create-server')">Abort</button>
