@@ -1,48 +1,354 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOXKEL HUB</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        body { background-color: #0d0f12; color: #a3afbe; height: 100vh; display: flex; overflow: hidden; }
+const socket = io();
 
-        /* AUTH SCREEN */
-        #auth-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #0d0f12; display: flex; justify-content: center; align-items: center; z-index: 999; }
-        .auth-box { background: #161920; padding: 30px; border-radius: 6px; width: 350px; text-align: center; border: 1px solid #232a36; }
-        .auth-box h2 { color: #fff; margin-bottom: 12px; font-size: 24px; letter-spacing: 1px; }
-        .auth-box input { width: 100%; padding: 10px; background: #0d0f12; border: 1px solid #232a36; border-radius: 4px; color: #fff; margin-bottom: 12px; outline: none; }
-        .auth-box button { width: 100%; padding: 10px; background: #00ffcc; color: #0d0f12; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        .secondary-btn { background: transparent !important; color: #a3afbe !important; margin-top: 10px; cursor: pointer; border: none; font-size: 12px; text-decoration: underline; }
+let currentUsername = "";
+let currentServerId = "";
+let currentChannelName = "";
+let currentChannelId = ""; // Combined format: serverId-channelName
+let currentServerOwner = "";
+let authMode = "login";
 
-        /* MODAL OVERLAYS (Replaces old browser prompts) */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); display: none; justify-content: center; align-items: center; z-index: 100; }
-        .modal-card { background: #161920; border: 1px solid #232a36; padding: 25px; border-radius: 8px; width: 400px; display: flex; flex-direction: column; gap: 14px; }
-        .modal-card h3 { color: #fff; font-size: 18px; }
-        .modal-card label { font-size: 12px; color: #728296; text-transform: uppercase; font-weight: bold; }
-        .modal-card input, .modal-card select { width: 100%; padding: 10px; background: #0d0f12; border: 1px solid #232a36; border-radius: 4px; color: #fff; outline: none; }
-        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
-        .modal-btn { padding: 8px 16px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; }
-        .btn-confirm { background: #00ffcc; color: #0d0f12; }
-        .btn-cancel { background: #232a36; color: #a3afbe; }
+window.onload = function() {
+    const savedUser = localStorage.getItem("noxkel_user");
+    if (savedUser) {
+        currentUsername = savedUser;
+        initHubDeck(false); 
+    } else {
+        // CORRECTION GATEWAY: Forces login portal to display if no local token is stored
+        document.getElementById('auth-container').style.display = 'flex';
+        document.getElementById('app-container').style.display = 'none';
+    }
 
-        /* CORE GRID DECK CONTROL */
-        #app-container { display: none; width: 100vw; height: 100vh; }
+    // Bind Enter key to chat transmitter input
+    document.getElementById('chat-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { transmitMessage(); }
+    });
+};
 
-        /* Col 1: Server Rail */
-        .rail-servers { width: 70px; background: #0d0f12; display: flex; flex-direction: column; align-items: center; padding-top: 15px; gap: 12px; border-right: 1px solid #161920; }
-        .srv-node { width: 46px; height: 46px; background: #161920; border-radius: 6px; display: flex; justify-content: center; align-items: center; color: #00ffcc; font-weight: bold; cursor: pointer; border: 1px solid #232a36; font-size: 14px; transition: 0.2s; }
-        .srv-node:hover, .srv-node.active { background: #00ffcc; color: #0d0f12; border-radius: 12px; }
-        .rail-action-btn { font-size: 18px; color: #728296; border-style: dashed; }
-        .rail-action-btn:hover { color: #fff; border-color: #fff; }
+// 1. OVERLAY UI CONTROL MOTOR FUNCTIONS
+function openModal(id) { document.getElementById(id).style.display = "flex"; }
+function closeModal(id) { document.getElementById(id).style.display = "none"; }
 
-        /* Col 2: Channels Sub-bar */
-        .sidebar-channels { width: 220px; background: #12161f; display: flex; flex-direction: column; border-right: 1px solid #161920; }
-        .sidebar-header { height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; font-weight: bold; color: #fff; border-bottom: 1px solid #161920; font-size: 14px; }
-        .add-room-trigger { font-size: 18px; color: #728296; cursor: pointer; font-weight: normal; }
-        .add-room-trigger:hover { color: #00ffcc; }
-        .channel-list { flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
-        .ch-item { padding: 8px; border-radius: 4px; cursor: pointer; font-size: 13px; color: #728296; display: flex; align-items: center; justify-content: space-between; }
-        .ch-item:hover, .ch-item.active { background: #161920; color: #fff; }
+function toggleCodeFieldDisplay() {
+    const type = document.getElementById('new-server-privacy-input').value;
+    const wrapper = document.getElementById('private-code-field-wrapper');
+    wrapper.style.display = (type === 'private') ? 'block' : 'none';
+}
+
+// 2. IDENTITY ENTRY GATEWAYS
+function toggleAuthMode() {
+    const title = document.getElementById('auth-title');
+    const submitBtn = document.querySelector('#auth-container button');
+    const toggleBtn = document.getElementById('toggle-auth');
+
+    if (authMode === "login") {
+        authMode = "signup";
+        title.innerText = "NOXKEL SIGNUP";
+        submitBtn.innerText = "Create Account";
+        toggleBtn.innerText = "Have an account? Log In";
+    } else {
+        authMode = "login";
+        title.innerText = "NOXKEL HUB";
+        submitBtn.innerText = "Connect";
+        toggleBtn.innerText = "Need an account? Sign Up";
+    }
+}
+
+async function handleAuth() {
+    const u = document.getElementById('username').value.trim();
+    const p = document.getElementById('password').value.trim();
+    if(!u || !p) return alert("Fill in missing string fields.");
+
+    const res = await fetch('/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: authMode, username: u, password: p })
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+        currentUsername = u;
+        localStorage.setItem("noxkel_user", u);
+        initHubDeck(data.isNewUser); 
+    } else { alert(data.message || "Credential mapping error."); }
+}
+
+async function initHubDeck(isNewUser) {
+    document.getElementById('auth-container').style.display = 'none';
+    document.getElementById('app-container').style.display = 'flex';
+    document.getElementById('my-display-username').innerText = `@${currentUsername}`;
+    
+    const res = await fetch(`/api/user/pfp/${currentUsername}`);
+    const d = await res.json();
+    document.getElementById('my-footer-avatar-img').src = d.pfp;
+
+    if (isNewUser) {
+        openModal('modal-global-invite');
+    } else {
+        loadServersRail();
+    }
+}
+
+async function acceptGlobalInvite() {
+    closeModal('modal-global-invite');
+    await fetch('/api/servers/join-global', { method: 'POST' });
+    loadServersRail();
+}
+
+// 3. SERVER OPERATIONS
+async function loadServersRail() {
+    const res = await fetch('/api/servers/my');
+    const servers = await res.json();
+    const rail = document.getElementById('dynamic-servers-rail');
+    rail.innerHTML = "";
+
+    servers.forEach(s => {
+        const btn = document.createElement('div');
+        btn.className = `srv-node ${currentServerId === s._id ? 'active' : ''}`;
+        btn.innerText = s.name.substring(0,2).toUpperCase();
+        btn.title = s.name;
+        btn.onclick = () => selectServerWorkspace(s, s.channels);
+        rail.appendChild(btn);
+    });
+
+    if (servers.length > 0 && !currentServerId) {
+        selectServerWorkspace(servers[0], servers[0].channels);
+    }
+}
+
+async function confirmCreateServer() {
+    const name = document.getElementById('new-server-name-input').value.trim();
+    const privacy = document.getElementById('new-server-privacy-input').value;
+    const code = document.getElementById('new-server-code-input').value.trim();
+
+    if(!name) return alert("Name field is mandatory.");
+    if(privacy === 'private' && !code) return alert("Private protocols require a key code.");
+
+    const res = await fetch('/api/servers/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, isPrivate: (privacy === 'private'), accessCode: code })
+    });
+    
+    if(res.ok) {
+        closeModal('modal-create-server');
+        document.getElementById('new-server-name-input').value = "";
+        document.getElementById('new-server-code-input').value = "";
+        loadServersRail();
+    }
+}
+
+async function confirmJoinByCode() {
+    const code = document.getElementById('join-code-input').value.trim();
+    if(!code) return alert("Please supply an access code.");
+
+    const res = await fetch('/api/servers/join-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    
+    if(data.success) {
+        closeModal('modal-join-code');
+        document.getElementById('join-code-input').value = "";
+        currentServerId = data.server._id;
+        loadServersRail();
+    } else { alert(data.message); }
+}
+
+function selectServerWorkspace(serverObj, channels) {
+    currentServerId = serverObj._id;
+    currentServerOwner = serverObj.owner;
+    document.getElementById('active-server-title').innerText = serverObj.name;
+    
+    const isAdmin = (currentServerOwner === currentUsername);
+    document.getElementById('add-room-sidebar-btn').style.display = isAdmin ? "inline" : "none";
+    document.getElementById('rules-mod-btn').style.display = isAdmin ? "block" : "none";
+
+    document.querySelectorAll('.srv-node').forEach(n => {
+        if(n.title === serverObj.name) n.classList.add('active');
+        else n.classList.remove('active');
+    });
+
+    const list = document.getElementById('active-channels-list');
+    list.innerHTML = "";
+
+    channels.forEach((ch, idx) => {
+        const item = document.createElement('div');
+        item.className = `ch-item ${idx === 0 ? 'active' : ''}`;
+        item.innerText = `# ${ch.name}`;
+        
+        if (ch.isReadOnly) {
+            const badge = document.createElement('span');
+            badge.className = "badge-readonly";
+            badge.innerText = "NOTICE";
+            item.appendChild(badge);
+        }
+
+        item.onclick = () => {
+            document.querySelectorAll('.ch-item').forEach(c => c.classList.remove('active'));
+            item.classList.add('active');
+            targetChannelStream(ch);
+        };
+        list.appendChild(item);
+    });
+
+    if (channels.length > 0) targetChannelStream(channels[0]);
+}
+
+// 4. CHANNELS & CHANNEL LOGIC
+async function confirmAddRoomChannel() {
+    const roomName = document.getElementById('new-room-name-input').value.trim();
+    const type = document.getElementById('new-room-type-input').value;
+
+    if(!roomName) return alert("Room identification label required.");
+
+    const res = await fetch('/api/channels/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            serverId: currentServerId,
+            roomName,
+            isReadOnly: (type === 'readonly')
+        })
+    });
+    
+    if(res.ok) {
+        closeModal('modal-add-room');
+        document.getElementById('new-room-name-input').value = "";
+        const refreshRes = await fetch('/api/servers/my');
+        const workspaces = await refreshRes.json();
+        const activeSrv = workspaces.find(w => w._id === currentServerId);
+        selectServerWorkspace(activeSrv, activeSrv.channels);
+    }
+}
+
+async function targetChannelStream(channelObj) {
+    currentChannelName = channelObj.name;
+    currentChannelId = `${currentServerId}-${channelObj.name}`;
+    document.getElementById('active-channel-title').innerText = `# ${channelObj.name}`;
+    
+    const inputField = document.getElementById('chat-input');
+    if (channelObj.isReadOnly && currentServerOwner !== currentUsername) {
+        inputField.disabled = true;
+        inputField.placeholder = "[READ ONLY — NOTICES CHANNEL]";
+    } else {
+        inputField.disabled = false;
+        inputField.placeholder = "Broadcast string packet...";
+    }
+
+    socket.emit('join_channel', currentChannelId);
+
+    const res = await fetch(`/api/messages/${currentChannelId}`);
+    const history = await res.json();
+    
+    const scroller = document.getElementById('chat-scroller');
+    scroller.innerHTML = "";
+
+    for (const msg of history) {
+        const pfpRes = await fetch(`/api/user/pfp/${msg.username}`);
+        const pfpData = await pfpRes.json();
+        renderMessageRow(msg, pfpData.pfp);
+    }
+}
+
+// 5. CHAT MESSAGING SYSTEMS
+async function transmitMessage() {
+    const input = document.getElementById('chat-input');
+    const val = input.value.trim();
+    if(!val) return;
+
+    socket.emit('send_chat_message', {
+        serverId: currentServerId,
+        channelId: currentChannelId,
+        channelName: currentChannelName,
+        username: currentUsername,
+        text: val
+    });
+    input.value = "";
+}
+
+function renderMessageRow(msg, avatarUrl) {
+    const scroller = document.getElementById('chat-scroller');
+    const row = document.createElement('div');
+    row.className = "msg-line";
+    
+    row.innerHTML = `
+        <img src="${avatarUrl}" class="msg-avatar">
+        <div class="msg-info">
+            <span class="msg-user">@${msg.username}</span>
+            <span class="msg-text">${msg.text}</span>
+        </div>
+    `;
+    scroller.appendChild(row);
+    scroller.scrollTop = scroller.scrollHeight;
+}
+
+// 6. UTILITY MANAGEMENT MODALS (AUTOMOD/PFP)
+function openAutoModConfigModal() { openModal('modal-automod'); }
+
+async function confirmAutoModRules() {
+    const words = document.getElementById('automod-words-input').value.trim();
+    
+    const res = await fetch('/api/servers/automod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId: currentServerId, words })
+    });
+    const d = await res.json();
+    if(d.success) {
+        closeModal('modal-automod');
+        alert("AutoMod parameters injected successfully.");
+    }
+}
+
+async function confirmPfpUpdate() {
+    const url = document.getElementById('user-pfp-url-input').value.trim();
+    if(!url) return;
+
+    const res = await fetch('/api/profile/pfp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pfp: url })
+    });
+    if(res.ok) {
+        closeModal('modal-user-pfp');
+        document.getElementById('my-footer-avatar-img').src = url;
+        alert("Avatar asset synchronized.");
+    }
+}
+
+// 7. LISTENING MATRIX INTERCEPTORS
+socket.on('receive_chat_message', (msg) => {
+    if (msg.channelId === currentChannelId) {
+        renderMessageRow(msg, msg.pfp || "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel");
+    }
+});
+
+socket.on('mod_action', (action) => {
+    alert(action.text);
+    
+    if(action.type === 'temp_mute') {
+        const inputField = document.getElementById('chat-input');
+        inputField.disabled = true;
+        let timeRemaining = action.minutes * 60;
+
+        const countdown = setInterval(() => {
+            timeRemaining--;
+            let mins = Math.floor(timeRemaining / 60);
+            let secs = timeRemaining % 60;
+            inputField.placeholder = `[MUTED — VIOLATION DETECTED: ${mins}m ${secs}s]`;
+
+            if (timeRemaining <= 0) {
+                clearInterval(countdown);
+                inputField.disabled = false;
+                inputField.placeholder = "Broadcast string packet...";
+            }
+        }, 1000);
+    }
+
+    if(action.type === 'perma_mute') {
+        document.getElementById('chat-input').disabled = true;
+        document.getElementById('chat-input').placeholder = "[LOCKED - PERMANENT BAN/MUTE ACTIVE]";
+    }
+});
