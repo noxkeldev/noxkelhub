@@ -11,8 +11,17 @@ window.onload = function() {
     const savedUser = localStorage.getItem("noxkel_user");
     if (savedUser) {
         currentUsername = savedUser;
-        initHubDeck(false); // don't show login invite on simple session reload
+        initHubDeck(false); 
+    } else {
+        // CORRECTION GATEWAY: Forces login portal to display if no local token is stored
+        document.getElementById('auth-container').style.display = 'flex';
+        document.getElementById('app-container').style.display = 'none';
     }
+
+    // Bind Enter key to chat transmitter input
+    document.getElementById('chat-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { transmitMessage(); }
+    });
 };
 
 // 1. OVERLAY UI CONTROL MOTOR FUNCTIONS
@@ -59,7 +68,7 @@ async function handleAuth() {
     if (data.success) {
         currentUsername = u;
         localStorage.setItem("noxkel_user", u);
-        initHubDeck(data.isNewUser); // Trigger global invite conditional check if brand new
+        initHubDeck(data.isNewUser); 
     } else { alert(data.message || "Credential mapping error."); }
 }
 
@@ -68,7 +77,6 @@ async function initHubDeck(isNewUser) {
     document.getElementById('app-container').style.display = 'flex';
     document.getElementById('my-display-username').innerText = `@${currentUsername}`;
     
-    // Core profile synchronization
     const res = await fetch(`/api/user/pfp/${currentUsername}`);
     const d = await res.json();
     document.getElementById('my-footer-avatar-img').src = d.pfp;
@@ -123,7 +131,6 @@ async function confirmCreateServer() {
     
     if(res.ok) {
         closeModal('modal-create-server');
-        // Reset inputs
         document.getElementById('new-server-name-input').value = "";
         document.getElementById('new-server-code-input').value = "";
         loadServersRail();
@@ -154,12 +161,10 @@ function selectServerWorkspace(serverObj, channels) {
     currentServerOwner = serverObj.owner;
     document.getElementById('active-server-title').innerText = serverObj.name;
     
-    // Toggle Admin Control visibility states
     const isAdmin = (currentServerOwner === currentUsername);
     document.getElementById('add-room-sidebar-btn').style.display = isAdmin ? "inline" : "none";
     document.getElementById('rules-mod-btn').style.display = isAdmin ? "block" : "none";
 
-    // Manage UI highlight circles
     document.querySelectorAll('.srv-node').forEach(n => {
         if(n.title === serverObj.name) n.classList.add('active');
         else n.classList.remove('active');
@@ -211,7 +216,6 @@ async function confirmAddRoomChannel() {
     if(res.ok) {
         closeModal('modal-add-room');
         document.getElementById('new-room-name-input').value = "";
-        // Refresh active workspace structures
         const refreshRes = await fetch('/api/servers/my');
         const workspaces = await refreshRes.json();
         const activeSrv = workspaces.find(w => w._id === currentServerId);
@@ -224,7 +228,6 @@ async function targetChannelStream(channelObj) {
     currentChannelId = `${currentServerId}-${channelObj.name}`;
     document.getElementById('active-channel-title').innerText = `# ${channelObj.name}`;
     
-    // Manage input lockdown rules for Read-Only Notice channels
     const inputField = document.getElementById('chat-input');
     if (channelObj.isReadOnly && currentServerOwner !== currentUsername) {
         inputField.disabled = true;
@@ -282,9 +285,7 @@ function renderMessageRow(msg, avatarUrl) {
 }
 
 // 6. UTILITY MANAGEMENT MODALS (AUTOMOD/PFP)
-function openAutoModConfigModal() {
-    openModal('modal-automod');
-}
+function openAutoModConfigModal() { openModal('modal-automod'); }
 
 async function confirmAutoModRules() {
     const words = document.getElementById('automod-words-input').value.trim();
