@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 
 const router = express.Router();
 
+// BORROW EXTANT MODELS FROM CORE INSTANCE (Prevents overwrite compilation loops)
 const User = mongoose.model('User');
 const ChatServer = mongoose.model('ChatServer');
 const Message = mongoose.model('Message');
@@ -47,6 +48,7 @@ router.post('/api/servers/join-global', async (req, res) => {
 router.get('/api/servers/my', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const user = await User.findOne({ username: req.session.user });
+    if (!user) return res.json([]);
     const servers = await ChatServer.find({ _id: { $in: user.servers } });
     res.json(servers);
 });
