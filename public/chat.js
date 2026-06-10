@@ -13,12 +13,10 @@ window.onload = function() {
         currentUsername = savedUser;
         initHubDeck(false); 
     } else {
-        // CORRECTION GATEWAY: Forces login portal to display if no local token is stored
         document.getElementById('auth-container').style.display = 'flex';
         document.getElementById('app-container').style.display = 'none';
     }
 
-    // Bind Enter key to chat transmitter input
     document.getElementById('chat-input').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') { transmitMessage(); }
     });
@@ -56,7 +54,7 @@ function toggleAuthMode() {
 async function handleAuth() {
     const u = document.getElementById('username').value.trim();
     const p = document.getElementById('password').value.trim();
-    if(!u || !p) return alert("Fill in missing string fields.");
+    if(!u || !p) return alert("Fill in missing fields.");
 
     const res = await fetch('/auth', {
         method: 'POST',
@@ -84,14 +82,27 @@ async function initHubDeck(isNewUser) {
     if (isNewUser) {
         openModal('modal-global-invite');
     } else {
-        loadServersRail();
+        // Verification protocol: verify if returning user already has a mainframe track linked
+        const srvCheck = await fetch('/api/servers/my');
+        const currentServers = await srvCheck.json();
+        
+        if (currentServers.length === 0) {
+            openModal('modal-global-invite');
+        } else {
+            loadServersRail();
+        }
     }
 }
 
 async function acceptGlobalInvite() {
     closeModal('modal-global-invite');
-    await fetch('/api/servers/join-global', { method: 'POST' });
-    loadServersRail();
+    const res = await fetch('/api/servers/join-global', { method: 'POST' });
+    if (res.ok) {
+        loadServersRail();
+    } else {
+        alert("Mainframe link fault. Retrying sequence.");
+        loadServersRail();
+    }
 }
 
 // 3. SERVER OPERATIONS
@@ -130,10 +141,14 @@ async function confirmCreateServer() {
     });
     
     if(res.ok) {
+        const newServerData = await res.json();
         closeModal('modal-create-server');
         document.getElementById('new-server-name-input').value = "";
         document.getElementById('new-server-code-input').value = "";
+        currentServerId = newServerData._id; // Instantly snap view into new hub context
         loadServersRail();
+    } else {
+        alert("Failed to construct core mainframe board node.");
     }
 }
 
@@ -193,7 +208,11 @@ function selectServerWorkspace(serverObj, channels) {
         list.appendChild(item);
     });
 
-    if (channels.length > 0) targetChannelStream(channels[0]);
+    if (channels.length > 0) selectInitialChannelDefault(channels[0]);
+}
+
+function selectInitialChannelDefault(chObj) {
+    targetChannelStream(chObj);
 }
 
 // 4. CHANNELS & CHANNEL LOGIC
