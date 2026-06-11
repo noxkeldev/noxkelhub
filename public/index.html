@@ -20,34 +20,78 @@
         .rail { width: 70px; background: #000; border-right: 1px solid #111; display: flex; flex-direction: column; align-items: center; padding-top: 15px; gap: 10px; }
         .srv-node { width: 50px; height: 50px; background: #0a0a0a; border: 1px solid #00ff00; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
         .srv-node.active, .srv-node:hover { background: #00ff00; color: #000; box-shadow: 0 0 10px #00ff00; }
+        
         .sidebar { width: 240px; background: #0a0a0a; border-right: 1px solid #111; display: flex; flex-direction: column; }
         .sidebar-header { padding: 15px; border-bottom: 1px solid #111; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* SIDEBAR SYSTEM PANELS INTERFACE */
+        .system-nav-rack { padding: 10px 15px; border-bottom: 1px solid #111; display: flex; flex-direction: column; gap: 5px; }
+        .sys-btn { padding: 6px 10px; font-size: 0.75rem; border: 1px dashed #00ff00; color: #00ff00; background: none; text-align: left; cursor: pointer; font-weight: bold; }
+        .sys-btn:hover, .sys-btn.active { background: #00ff00; color: #000; }
+
         .channels-wrapper { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
         .ch-item { padding: 8px 12px; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
         .ch-item.active, .ch-item:hover { background: rgba(0, 255, 0, 0.1); }
         .badge-readonly { background: #ff0055; color: #fff; font-size: 0.6rem; padding: 2px 6px; border-radius: 3px; font-weight: bold; }
+        
         .sidebar-footer { padding: 15px; border-top: 1px solid #111; display: flex; align-items: center; gap: 10px; background: #000; }
         .my-avatar { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #00ff00; cursor: pointer; }
-        .main-chat-deck { flex: 1; background: #050505; display: flex; flex-direction: column; }
-        .chat-header { padding: 15px; border-bottom: 1px solid #111; font-weight: bold; letter-spacing: 1px; }
+        
+        /* MULTI-VIEW WORKSPACE INTERFACES */
+        .workspace-panel { flex: 1; background: #050505; display: none; flex-direction: column; height: 100%; }
+        .workspace-panel.active { display: flex; }
+        
+        .panel-header { padding: 15px; border-bottom: 1px solid #111; font-weight: bold; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* CHAT VIEW SPECIFICS */
         .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        .msg-line { display: flex; gap: 12px; align-items: flex-start; }
-        .msg-avatar { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #333; }
-        .msg-info { display: flex; flex-direction: column; gap: 4px; }
-        .msg-user { font-weight: bold; font-size: 0.85rem; color: #888; }
+        .msg-line { display: flex; gap: 12px; align-items: flex-start; position: relative; }
+        .msg-line:hover .msg-actions-trigger { display: flex; }
+        .msg-avatar { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #333; cursor: pointer; }
+        .msg-info { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+        .msg-user { font-weight: bold; font-size: 0.85rem; color: #888; cursor: pointer; }
+        .msg-user:hover { color: #00ff00; text-decoration: underline; }
         .msg-text { font-size: 0.95rem; word-break: break-all; color: #dfdfdf; }
-        .chat-input-bar { padding: 20px; border-top: 1px solid #111; display: flex; gap: 10px; background: #000; }
+        .msg-img-attachment { max-width: 250px; max-height: 180px; border: 1px solid #00ff00; margin-top: 5px; border-radius: 4px; }
+        
+        /* MESSAGE REVISION UTILITIES (EDIT/DELETE) */
+        .msg-actions-trigger { display: none; position: absolute; right: 10px; top: 0; background: #0a0a0a; border: 1px solid #00ff00; border-radius: 4px; padding: 2px; gap: 5px; }
+        .msg-action-btn { background: none; border: none; color: #00ff00; font-size: 0.7rem; cursor: pointer; padding: 2px 5px; }
+        .msg-action-btn:hover { background: #00ff00; color: #000; }
+
+        .chat-input-bar { padding: 20px; border-top: 1px solid #111; display: flex; gap: 10px; background: #000; align-items: center; }
         .chat-input-bar input { flex: 1; background: #050505; border: 1px solid #00ff00; color: #00ff00; padding: 12px; border-radius: 4px; outline: none; }
+        .img-upload-shortcut { background: none; border: 1px dashed #00ff00; color: #00ff00; padding: 10px; cursor: pointer; font-size: 0.8rem; border-radius: 4px; }
+        
+        /* DISCOVER & DASHBOARD DECKS GRID Layouts */
+        .grid-matrix { flex: 1; padding: 20px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; }
+        .matrix-card { background: #0a0a0a; border: 1px solid #00ff00; border-radius: 6px; padding: 15px; display: flex; flex-direction: column; gap: 10px; justify-content: space-between; }
+        .matrix-card h4 { font-size: 1rem; color: #fff; }
+        .matrix-card p { font-size: 0.75rem; color: #888; }
+        
+        /* SOCIAL TRACKS CONTAINER */
+        .social-split-deck { flex: 1; display: flex; overflow: hidden; }
+        .social-column { flex: 1; border-right: 1px solid #111; display: flex; flex-direction: column; }
+        .social-col-header { padding: 10px; background: #0a0a0a; border-bottom: 1px solid #111; font-size: 0.8rem; font-weight: bold; text-align: center; }
+        .social-list { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .social-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border: 1px solid #222; background: #000; border-radius: 4px; font-size: 0.85rem; }
+        
+        /* SETTINGS MATRIX WRAPPER */
+        .settings-form-wrapper { max-width: 500px; padding: 30px; display: flex; flex-direction: column; gap: 15px; }
+        .settings-form-wrapper label { font-size: 0.8rem; color: #888; }
+        .settings-form-wrapper input, .settings-form-wrapper select, .settings-form-wrapper textarea { background: #000; border: 1px solid #00ff00; color: #00ff00; padding: 10px; border-radius: 4px; outline: none; }
         
         /* SYSTEM CORE MODALS */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); justify-content: center; align-items: center; z-index: 999; }
         .modal-card { background: #0a0a0a; border: 2px solid #00ff00; width: 400px; padding: 25px; border-radius: 6px; display: flex; flex-direction: column; gap: 15px; }
         .modal-card h3 { font-size: 1.1rem; border-bottom: 1px solid #111; padding-bottom: 10px; letter-spacing: 1px; }
-        .modal-card input, .modal-card select { background: #000; border: 1px solid #00ff00; color: #00ff00; padding: 10px; border-radius: 4px; outline: none; }
+        .modal-card input, .modal-card select, .modal-card textarea { background: #000; border: 1px solid #00ff00; color: #00ff00; padding: 10px; border-radius: 4px; outline: none; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
         .modal-actions button { padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; background: none; color: #00ff00; border: 1px solid #00ff00; }
         .modal-actions button.primary { background: #00ff00; color: #000; border: none; }
         .action-icon { cursor: pointer; font-size: 1.2rem; }
+        .danger-btn { background: none; border: 1px solid #ff0055 !important; color: #ff0055 !important; }
+        .danger-btn:hover { background: #ff0055 !important; color: #fff !important; }
     </style>
 </head>
 <body>
@@ -71,8 +115,18 @@
             <div class="sidebar-header">
                 <span id="active-server-title">No Server</span>
                 <span id="add-room-sidebar-btn" class="action-icon" onclick="openModal('modal-add-room')" style="display: none;">+</span>
+                <button id="owner-delete-server-btn" onclick="triggerServerObliteration()" style="display: none; background: none; border: 1px dashed #ff0055; color: #ff0055; font-size: 0.65rem; padding: 2px 4px; cursor: pointer;">DELETE</button>
             </div>
+            
+            <div class="system-nav-rack">
+                <button class="sys-btn active" id="nav-chat-btn" onclick="switchWorkspaceView('panel-chat-deck')">📡 SERVER CHAT FEED</button>
+                <button class="sys-btn" id="nav-discover-btn" onclick="loadDiscoverMainframe()">🌐 DISCOVER PUBLIC NODES</button>
+                <button class="sys-btn" id="nav-social-btn" onclick="loadSocialMainframe()">👥 SOCIAL & DM MATRIX</button>
+                <button class="sys-btn" id="nav-settings-btn" onclick="switchWorkspaceView('panel-settings-deck')">⚙️ HARDWARE SETTINGS</button>
+            </div>
+
             <div class="channels-wrapper" id="active-channels-list"></div>
+            
             <div class="sidebar-footer">
                 <img src="https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel" id="my-footer-avatar-img" class="my-avatar" onclick="openModal('modal-user-pfp')">
                 <span id="my-display-username">@user</span>
@@ -80,12 +134,114 @@
             </div>
         </div>
 
-        <div class="main-chat-deck">
-            <div class="chat-header" id="active-channel-title"># welcome</div>
+        <div class="workspace-panel active" id="panel-chat-deck">
+            <div class="panel-header">
+                <span id="active-channel-title"># welcome</span>
+                <button id="owner-delete-channel-btn" onclick="triggerChannelObliteration()" style="display: none; background: none; border: 1px dashed #ff0055; color: #ff0055; font-size: 0.7rem; padding: 4px 8px; cursor: pointer;">DELETE ROOM</button>
+            </div>
             <div class="chat-messages" id="chat-scroller"></div>
             <div class="chat-input-bar">
+                <button class="img-upload-shortcut" onclick="openModal('modal-send-photo')" title="Attach Image Packet">📷</button>
                 <input type="text" id="chat-input" placeholder="Broadcast string packet...">
-                <button onclick="transmitMessage()" style="background:#00ff00; color:#000; border:none; padding:0 20px; font-weight:bold; border-radius:4px; cursor:pointer;">Send</button>
+                <button onclick="transmitMessage()" style="background:#00ff00; color:#000; border:none; padding:0 20px; height: 100%; font-weight:bold; border-radius:4px; cursor:pointer;">Send</button>
+            </div>
+        </div>
+
+        <div class="workspace-panel" id="panel-discover-deck">
+            <div class="panel-header">🌐 DISCOVER OPEN MAINFRAME SYSTEMS</div>
+            <div class="grid-matrix" id="discover-servers-grid"></div>
+        </div>
+
+        <div class="workspace-panel" id="panel-social-deck">
+            <div class="panel-header">👥 PRIVATE COMMUNICATION INTERFACES</div>
+            <div class="social-split-deck">
+                <div class="social-column">
+                    <div class="social-col-header">PENDING INCOMING TRANSMISSIONS</div>
+                    <div class="social-list" id="social-requests-box"></div>
+                </div>
+                <div class="social-column">
+                    <div class="social-col-header">ESTABLISHED SYNCED FRIENDS</div>
+                    <div class="social-list" id="social-friends-box"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="workspace-panel" id="panel-settings-deck">
+            <div class="panel-header">⚙️ CORE SYSTEM INTERFACE CONFIGURATION</div>
+            <div class="settings-form-wrapper">
+                <label>SYSTEM PRONOUN SIGNATURE IDENTIFIER</label>
+                <select id="setting-pronouns-input">
+                    <option value="He/Him">He/Him</option>
+                    <option value="She/Her">She/Her</option>
+                    <option value="Not Specified">Not Specified</option>
+                </select>
+                
+                <label>BIOLOGICAL SYSTEM AGE TRACK</label>
+                <input type="number" id="setting-age-input" placeholder="Enter age metrics">
+                
+                <label>DATAFEED TERMINAL CUSTOM USER BIO LOG</label>
+                <textarea id="setting-bio-input" rows="4" placeholder="Write custom system bio protocols..."></textarea>
+                
+                <button onclick="commitHardwareSettingsChanges()" style="background:#00ff00; color:#000; padding:12px; font-weight:bold; border:none; cursor:pointer; border-radius:4px;">Infect Configuration Changes</button>
+                
+                <hr style="border: 0; border-top: 1px solid #111; margin: 15px 0;">
+                <button class="danger-btn" onclick="executeSystemTermLogout()" style="padding:12px; font-weight:bold; border:1px solid #ff0055; cursor:pointer; border-radius:4px;">HALT CURRENT SYSTEM SESSION (LOGOUT)</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="modal-view-profile" class="modal-overlay">
+        <div class="modal-card">
+            <h3 id="prof-modal-username">@User Handle</h3>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <img src="" id="prof-modal-pfp" style="width: 60px; height: 60px; border-radius: 50%; border: 1px solid #00ff00;">
+                <div>
+                    <p style="font-size: 0.8rem;" id="prof-modal-pronouns">Pronouns: </p>
+                    <p style="font-size: 0.8rem;" id="prof-modal-age">Age: </p>
+                </div>
+            </div>
+            <div style="background: #000; border: 1px solid #111; padding: 10px; font-size: 0.8rem; white-space: pre-wrap;" id="prof-modal-bio"></div>
+            <div class="modal-actions" id="prof-modal-interaction-bar">
+                </div>
+        </div>
+    </div>
+
+    <div id="modal-send-photo" class="modal-overlay">
+        <div class="modal-card">
+            <h3>📷 TRANSMIT PHOTO PACKET ASSET</h3>
+            <input type="text" id="photo-packet-url-input" placeholder="Paste direct image asset URL string">
+            <div class="modal-actions">
+                <button onclick="closeModal('modal-send-photo')">Abort</button>
+                <button class="primary" onclick="confirmPhotoPacketTransmission()">Deploy Asset to Stream</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-edit-message" class="modal-overlay">
+        <div class="modal-card">
+            <h3>📝 MODIFY CONSOLE MESSAGE PACKET</h3>
+            <input type="text" id="edit-message-text-input">
+            <div class="modal-actions">
+                <button onclick="closeModal('modal-edit-message')">Cancel</button>
+                <button class="primary" id="confirm-edit-msg-btn">Rewrite Packet</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-admin-terminal-dashboard" class="modal-overlay">
+        <div class="modal-card">
+            <h3>⚡ CORE ADMIN INSTRUMENT SECTOR</h3>
+            <p style="font-size: 0.75rem; color: #888;">Direct access console bypass array for active root administrators.</p>
+            <input type="text" id="admin-manual-target-user" placeholder="Target @username">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="danger-btn" onclick="dispatchManualAdminCommand('/kick')">KICK USER</button>
+                <button style="border:1px solid #00ff00; color:#00ff00; background:none; font-weight:bold; cursor:pointer;" onclick="dispatchManualAdminCommand('/giveadmin')">GRANT ADMIN</button>
+                <button style="border:1px solid #ffaa00; color:#ffaa00; background:none; font-weight:bold; cursor:pointer;" onclick="dispatchManualAdminCommand('/abadaba')">ACTIVATE ABADABA</button>
+                <button style="border:1px solid #00aaff; color:#00aaff; background:none; font-weight:bold; cursor:pointer;" onclick="dispatchManualAdminCommand('/undoabadaba')">RESET SIGNATURES</button>
+            </div>
+            <div class="modal-actions">
+                <button onclick="closeModal('modal-admin-terminal-dashboard')">Close Panel</button>
             </div>
         </div>
     </div>
@@ -147,7 +303,7 @@
     <div id="modal-automod" class="modal-overlay">
         <div class="modal-card">
             <h3>🤖 CONFIGURE AUTOMOD ALGORITHMS</h3>
-            <p style="font-size: 0.75rem; color: #888;">Enter restricted keywords separated by commas. Multi-strike triggers activate automated 10-minute lockouts.</p>
+            <p style="font-size: 0.75rem; color: #888;">Enter restricted keywords separated by commas.</p>
             <input type="text" id="automod-words-input" placeholder="spam, exploit, swearword">
             <div class="modal-actions">
                 <button onclick="closeModal('modal-automod')">Close</button>
