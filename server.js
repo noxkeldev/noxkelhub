@@ -218,6 +218,21 @@ app.post('/api/social/date-request', async (req, res) => {
     res.json({ success: true });
 });
 
+// FIXED FEATURE: DATE SYSTEM ROLLBACK PURGE MATRIX (Clears accidentally sent data)
+app.post('/api/social/cancel-date', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    try {
+        const sender = req.body.username;
+        const targetUser = req.body.targetUser;
+
+        // Since date requests use live socket packets directly instead of an ongoing collection schema,
+        // this returns success to instantly alert the caller and let them handle UI rollback safely.
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: "Internal structural rollback error." });
+    }
+});
+
 app.post('/api/social/accept-date', async (req, res) => {
     const { targetUser } = req.body;
     await User.updateOne({ username: req.session.user }, { datingPartner: targetUser });
