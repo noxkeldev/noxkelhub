@@ -142,73 +142,43 @@ async function confirmJoinByCode() {
 // ==========================================
 // 5. WORKSPACE CONTEXT SWITCHING (CHANNELS)
 // ==========================================
-function activateServerWorkspace(srv) {
-    currentServerId = srv._id;
-    currentServerOwner = srv.owner;
-    document.getElementById('active-server-title').innerText = srv.name;
-    
-    // Toggle admin visibility controls for server owners
-    const isOwner = currentServerOwner === currentUsername;
-    document.getElementById('add-room-sidebar-btn').style.display = isOwner ? 'block' : 'none';
-    document.getElementById('owner-delete-server-btn').style.display = isOwner ? 'block' : 'none';
-    document.getElementById('rules-mod-btn').style.display = isOwner ? 'block' : 'none';
-
-    renderChannelsList(srv.channels);
-    switchWorkspaceView('panel-chat-deck');
-}
-
-function renderChannelsList(channels) {
-    const box = document.getElementById('active-channels-list');
-    box.innerHTML = "";
-    channels.forEach(ch => {
-        const div = document.createElement('div');
-        div.className = "ch-item";
-        div.innerHTML = `<span># ${ch.name}</span> ${ch.isReadOnly ? '<span class="badge-readonly">READ-ONLY</span>' : ''}`;
-        div.onclick = () => selectChannelNode(ch.name);
-        box.appendChild(div);
-    });
-    if(channels.length > 0) selectChannelNode(channels[0].name);
-}
-
-async function selectChannelNode(name) {
-    currentChannelName = name;
-    currentChannelId = `${currentServerId}-${name}`;
-    document.getElementById('active-channel-title').innerText = `# ${name}`;
-    
-    // Show channel deletion button if user is server owner
-    document.getElementById('owner-delete-channel-btn').style.display = (currentServerOwner === currentUsername) ? 'block' : 'none';
-
-    socket.emit('join_channel', currentChannelId);
-    
-    // Load historical messages
-    const res = await fetch(`/api/messages/${currentChannelId}`);
-    const messages = await res.json();
-    document.getElementById('chat-scroller').innerHTML = "";
-    messages.forEach(msg => renderMessageRow(msg));
-}
-
 async function confirmAddRoomChannel() {
     const name = document.getElementById('new-room-name-input').value.trim().toLowerCase();
-    const type = document.getElementById('new-room-type-input').value;
-    if(!name) return;
+    const type = document.getElementById('new-room-type-input').value; // 'text' or 'voice' / 'read-only' depending on your HTML select dropdown
+    if(!name) return alert("CRITICAL ERROR: Room name identifier cannot be blank.");
 
-    alert("Injecting room parameter updates...");
-    closeModal('modal-add-room');
+    try {
+        const res = await fetch('/api/channels/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                serverId: currentServerId,
+                channelName: name,
+                isReadOnly: (type === 'readonly') // If your select option value for read-only is 'readonly'
+            })
+        });
+
+        if(res.ok) {
+            alert(`SYSTEM: Custom room sector #${name} successfully injected into database.`);
+            closeModal('modal-add-room');
+            document.getElementById('new-room-name-input').value = ""; // Clear input field
+            
+            // Hot reload the server workspace instantly so the new channel appears on your sidebar
+            const refreshRes = await fetch('/api/servers/my');
+            const servers = await refreshRes.json();
+            const currentServerData = servers.find(s => s._id === currentServerId);
+            if(currentServerData) {
+                renderChannelsList(currentServerData.channels);
+            }
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            alert(`ERROR: Mainframe rejected room injection. ${errData.message || ''}`);
+        }
+    } catch (err) {
+        console.error("Room creation sequence failure:", err);
+        alert("ERROR: Failed to establish channel creation handshake stream.");
+    }
 }
-
-// OBLITERATION ACTIONS (DELETIONS)
-async function triggerServerObliteration() {
-    if(!confirm("Execute complete deletion protocol on this server?")) return;
-    const res = await fetch(`/api/servers/${currentServerId}`, { method: 'DELETE' });
-    if(res.ok) location.reload();
-}
-
-async function triggerChannelObliteration() {
-    if(!confirm(`Execute destruction protocol on channel #${currentChannelName}?`)) return;
-    const res = await fetch(`/api/channels/${currentServerId}/${currentChannelName}`, { method: 'DELETE' });
-    if(res.ok) location.reload();
-}
-
 // ==========================================
 // 6. MESSAGING STREAM ENGINE (TRANSMISSIONS)
 // ==========================================
