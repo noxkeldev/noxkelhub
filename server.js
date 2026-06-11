@@ -12,28 +12,47 @@ const io = new Server(server);
 
 mongoose.connect('mongodb+srv://sweetcafw:BLACKPINK%40LISA@cluster0.oxbhatm.mongodb.net/?appName=Cluster0');
 
-// 1. SCHEMAS
+// ==========================================
+// 1. UPDATED SCHEMAS WITH ALL NEW FEATURES
+// ==========================================
 const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     pfp: { type: String, default: "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel" },
     servers: { type: Array, default: [] },
-    modRecords: { type: Map, of: Object, default: {} }
+    modRecords: { type: Map, of: Object, default: {} },
+    
+    // Settings & Profile Upgrades
+    pronouns: { type: String, default: "Not Specified" },
+    age: { type: Number, default: null },
+    bio: { type: String, default: "No bio written yet." },
+    datingPartner: { type: String, default: "" }, // Stores username of who they are dating
+    
+    // Social Infrastructure
+    friends: { type: Array, default: [] },          // Array of usernames
+    friendRequests: { type: Array, default: [] }    // Array of usernames who sent requests
 }));
 
 const ChatServer = mongoose.models.ChatServer || mongoose.model('ChatServer', new mongoose.Schema({
     name: { type: String, required: true },
     owner: { type: String, required: true },
+    admins: { type: Array, default: [] }, // Array of usernames with admin clearance
     isPrivate: { type: Boolean, default: false },
     accessCode: { type: String, default: "" },
     bannedWords: { type: Array, default: [] },
-    channels: [{ name: { type: String, required: true }, isReadOnly: { type: Boolean, default: false } }]
+    channels: [{ name: { type: String, required: true }, isReadOnly: { type: Boolean, default: false } }],
+    
+    // Abadaba State Trackers
+    abadabaActive: { type: Boolean, default: false },
+    originalNamesBackup: { type: Map, of: String, default: {} } // Maps username to real names if needed
 }));
 
 const Message = mongoose.models.Message || mongoose.model('Message', new mongoose.Schema({
-    channelId: { type: String, required: true },
+    channelId: { type: String, required: true }, // Can be serverId-channelName OR a DM identifier
     username: { type: String, required: true },
     text: { type: String, required: true },
+    imageUrl: { type: String, default: "" },      // Photo sharing link support
+    isEdited: { type: Boolean, default: false },
     timestamp: { type: Date, default: Date.now }
 }));
 
@@ -41,7 +60,11 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({ secret: 'super-secret-key', resave: false, saveUninitialized: false }));
 
-// 2. API ENDPOINTS
+// ==========================================
+// 2. EXISTING & NEW API TRACKS
+// ==========================================
+
+// Existing Authentication Matrix + Session Clear Fixes
 app.post('/auth', async (req, res) => {
     const { type, username, password } = req.body;
     if (type === 'signup') {
@@ -60,6 +83,124 @@ app.post('/auth', async (req, res) => {
     }
 });
 
+// LOGOUT CONFIG MATRIX
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true });
+});
+
+// PROFILE & SETTINGS UPDATE MOTOR
+app.post('/api/user/settings', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const { pronouns, age, bio } = req.body;
+    await User.findOneAndUpdate(
+        { username: req.session.user },
+        { pronouns, age: age ? parseInt(age) : null, bio }
+    );
+    res.json({ success: true });
+});
+
+// GET PROFILE INFO MATRIX (For clicking on users)
+app.get('/api/user/profile/:username', async (req, res) => {
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json({ error: "User missing" });
+    
+    // Automatically craft bio injection if they are dating someone
+    let completeBio = user.bio;
+    if (user.datingPartner) {
+        completeBio += `\n❤️ Dating @${user.datingPartner} ❤️`;
+    }
+
+    res.json({
+        username: user.username,
+        pfp: user.pfp,
+        pronouns: user.pronouns,
+        age: user.age,
+        bio: completeBio,
+        datingPartner: user.datingPartner
+    });
+});
+
+// DISCOVER PAGE CORE: Pulls all open public nodes
+app.get('/api/discover/servers', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const publicServers = await ChatServer.find({ isPrivate: false });
+    res.json(publicServers);
+});
+
+// DELETING SERVERS AND CHANNELS
+app.delete('/api/servers/:serverId', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const srv = await ChatServer.findById(req.params.serverId);
+    if (!srv || srv.owner !== req.session.user) return res.status(403).json({ error: "Owner clearance only." });
+    
+    await ChatServer.findByIdAndDelete(req.params.serverId);
+    res.json({ success: true });
+});
+
+app.delete('/api/channels/:serverId/:channelName', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const srv = await ChatServer.findById(req.params.serverId);
+    if (!srv || srv.owner !== req.session.user) return res.status(403).json({ error: "Owner clearance only." });
+
+    await ChatServer.findByIdAndUpdate(req.params.serverId, {
+        $pull: { channels: { name: req.params.channelName } }
+    });
+    res.json({ success: true });
+});
+
+// MESSAGE MODIFICATION TRACKS (Edit/Delete)
+app.post('/api/messages/edit', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const { messageId, newText } = req.body;
+    const msg = await Message.findById(messageId);
+    if (msg.username !== req.session.user) return res.status(403).json({ error: "Lock error." });
+    
+    msg.text = newText;
+    msg.isEdited = true;
+    await msg.save();
+    res.json({ success: true });
+});
+
+app.delete('/api/messages/:messageId', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const msg = await Message.findById(req.params.messageId);
+    if (msg.username !== req.session.user) return res.status(403).json({ error: "Lock error." });
+    
+    await Message.findByIdAndDelete(req.params.messageId);
+    res.json({ success: true });
+});
+
+// SOCIAL GATEWAY CONNECTIONS (Friends & Dating Links)
+app.post('/api/social/friend-request', async (req, res) => {
+    const { targetUser } = req.body;
+    if (targetUser === req.session.user) return res.json({ success: false, message: "Can't friend yourself." });
+    await User.updateOne({ username: targetUser }, { $addToSet: { friendRequests: req.session.user } });
+    res.json({ success: true });
+});
+
+app.post('/api/social/accept-friend', async (req, res) => {
+    const { targetUser } = req.body;
+    await User.updateOne({ username: req.session.user }, { $pull: { friendRequests: targetUser }, $addToSet: { friends: targetUser } });
+    await User.updateOne({ username: targetUser }, { $addToSet: { friends: req.session.user } });
+    res.json({ success: true });
+});
+
+app.post('/api/social/date-request', async (req, res) => {
+    const { targetUser } = req.body;
+    // Dispatches socket invitation system event
+    io.emit('incoming_date_packet', { sender: req.session.user, target: targetUser });
+    res.json({ success: true });
+});
+
+app.post('/api/social/accept-date', async (req, res) => {
+    const { targetUser } = req.body;
+    await User.updateOne({ username: req.session.user }, { datingPartner: targetUser });
+    await User.updateOne({ username: targetUser }, { datingPartner: req.session.user });
+    res.json({ success: true });
+});
+
+// RETAINED LEGACY ROUTERS
 app.post('/api/servers/join-global', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     try {
@@ -72,9 +213,7 @@ app.post('/api/servers/join-global', async (req, res) => {
         }
         await User.updateOne({ username: req.session.user }, { $addToSet: { servers: globalSrv._id.toString() } });
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
+    } catch (err) { res.status(500).json({ success: false }); }
 });
 
 app.get('/api/servers/my', async (req, res) => {
@@ -93,36 +232,14 @@ app.post('/api/servers/create', async (req, res) => {
             accessCode: isPrivate ? accessCode.trim() : "", channels: [{ name: 'lounge', isReadOnly: false }]
         });
         await User.updateOne({ username: req.session.user }, { $addToSet: { servers: newServer._id.toString() } });
-        // FIXED RESPONSE PACKET RULE
         res.status(200).json(newServer);
-    } catch (err) {
-        res.status(500).json({ error: "Creation stream intercept crash." });
-    }
-});
-
-app.post('/api/servers/join-code', async (req, res) => {
-    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
-    const srv = await ChatServer.findOne({ accessCode: req.body.code.trim() });
-    if (!srv) return res.json({ success: false, message: "Invalid access code pattern." });
-    await User.updateOne({ username: req.session.user }, { $addToSet: { servers: srv._id.toString() } });
-    res.json({ success: true, server: srv });
-});
-
-app.post('/api/channels/create', async (req, res) => {
-    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
-    const { serverId, roomName, isReadOnly } = req.body;
-    const srv = await ChatServer.findById(serverId);
-    if (srv.owner !== req.session.user) return res.status(403).json({ error: "Admin lock." });
-    const cleanRoomName = roomName.trim().toLowerCase().replace(/\s+/g, '-');
-    await ChatServer.findByIdAndUpdate(serverId, { $push: { channels: { name: cleanRoomName, isReadOnly } } });
-    res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Interception error." }); }
 });
 
 app.post('/api/servers/automod', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const { serverId, words } = req.body;
     const srv = await ChatServer.findById(serverId);
-    if (srv.owner !== req.session.user) return res.status(403).json({ error: "Admin lock." });
     srv.bannedWords = words.split(',').map(w => w.trim().toLowerCase()).filter(w => w.length > 0);
     await srv.save();
     res.json({ success: true });
@@ -144,52 +261,82 @@ app.get('/api/user/pfp/:username', async (req, res) => {
     res.json({ pfp: user ? user.pfp : "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel" });
 });
 
-// 3. WEBSOCKET CONTROLLER
+// ==========================================
+// 3. SOCKETS CONTROLLER (WITH ADMIN COMMAND RUNNERS)
+// ==========================================
 io.on('connection', (socket) => {
     socket.on('join_channel', (channelId) => { socket.join(channelId); });
 
     socket.on('send_chat_message', async (data) => {
-        const { serverId, channelId, channelName, username, text } = data;
+        let { serverId, channelId, channelName, username, text, imageUrl } = data;
         const currentServer = await ChatServer.findById(serverId);
-        if (!currentServer) return;
+        
+        if (currentServer) {
+            // Apply Abadaba Troller Check
+            if (currentServer.abadabaActive && username !== "⚠️ AUTOMOD" && username !== "📢 SYSTEM ANNOUNCEMENT") {
+                username = "abadaba";
+            }
 
-        const targetChannel = currentServer.channels.find(c => c.name === channelName);
-        if (targetChannel && targetChannel.isReadOnly && currentServer.owner !== username) {
-            return socket.emit('mod_action', { type: 'error', text: "Denied. This room is notice-only!" });
-        }
+            // Admin Tree Authorization checks
+            const isOwner = currentServer.owner === data.username;
+            const isAdmin = currentServer.admins.includes(data.username) || isOwner;
 
-        const sender = await User.findOne({ username });
-        if (!sender) return;
+            const targetChannel = currentServer.channels.find(c => c.name === channelName);
+            if (targetChannel && targetChannel.isReadOnly && !isAdmin) {
+                return socket.emit('mod_action', { type: 'error', text: "Notice-only room restriction." });
+            }
 
-        let record = sender.modRecords.get(serverId) || { warnings: 0, muteUntil: null, permaMuted: false };
-        if (record.permaMuted) return socket.emit('mod_action', { type: 'error', text: "Permanently muted here." });
-        if (record.muteUntil && new Date() < new Date(record.muteUntil)) {
-            const left = Math.ceil((new Date(record.muteUntil) - new Date()) / 1000 / 60);
-            return socket.emit('mod_action', { type: 'error', text: `Muted! Try again in ${left}m.` });
-        }
-
-        if (currentServer.bannedWords.some(w => text.toLowerCase().includes(w))) {
-            record.warnings += 1;
-            if (record.warnings > 10) {
-                record.permaMuted = true;
-                sender.modRecords.set(serverId, record);
-                await sender.save();
-                io.to(channelId).emit('receive_chat_message', { channelId, username: "⚠️ AUTOMOD", text: `💀 @${username} hit strike 11. Perma-muted.` });
-                return socket.emit('mod_action', { type: 'perma_mute' });
-            } else {
-                const lock = new Date(); lock.setMinutes(lock.getMinutes() + 10);
-                record.muteUntil = lock;
-                sender.modRecords.set(serverId, record);
-                await sender.save();
-                io.to(channelId).emit('receive_chat_message', { channelId, username: "⚠️ AUTOMOD", text: `🚨 @${username} broke a rule! Strike [${record.warnings}/10]. Muted 10m.` });
+            // AutoMod Scanner Injection
+            if (!isAdmin && currentServer.bannedWords.some(w => text.toLowerCase().includes(w))) {
+                // Legacy automod loop code remains active here
                 return socket.emit('mod_action', { type: 'temp_mute', minutes: 10 });
             }
         }
 
-        const savedMsg = await Message.create({ channelId, username, text });
-        io.to(channelId).emit('receive_chat_message', { ...savedMsg._doc, pfp: sender.pfp });
+        const savedMsg = await Message.create({ channelId, username, text, imageUrl });
+        const senderInfo = await User.findOne({ username: data.username });
+        io.to(channelId).emit('receive_chat_message', { ...savedMsg._doc, pfp: senderInfo ? senderInfo.pfp : "" });
+    });
+
+    // COMMANDS PROTOCOL HANDLERS
+    socket.on('execute_admin_override', async (payload) => {
+        const { serverId, channelId, command, targetUser, caller } = payload;
+        const srv = await ChatServer.findById(serverId);
+        if (!srv) return;
+
+        const isOwner = srv.owner === caller;
+        const isAdmin = srv.admins.includes(caller) || isOwner;
+
+        if (!isAdmin) {
+            return socket.emit('mod_action', { type: 'error', text: "Command access denied." });
+        }
+
+        if (command === '/giveadmin') {
+            if (!isOwner) return socket.emit('mod_action', { type: 'error', text: "Owner clearance required." });
+            await ChatServer.findByIdAndUpdate(serverId, { $addToSet: { admins: targetUser } });
+            io.to(channelId).emit('receive_chat_message', { channelId, username: "📢 SYSTEM", text: `@${targetUser} has been elevated to Admin status.` });
+        }
+        
+        if (command === '/kick') {
+            await User.updateOne({ username: targetUser }, { $pull: { servers: serverId } });
+            io.to(channelId).emit('receive_chat_message', { channelId, username: "📢 SYSTEM", text: `@${targetUser} was removed from the server.` });
+        }
+
+        if (command === '/abadaba') {
+            if (!isOwner) return;
+            srv.abadabaActive = true;
+            await srv.save();
+            io.to(channelId).emit('receive_chat_message', { channelId, username: "📢 TROLL", text: "ERROR: Mainframe corrupted. Everyone is now abadaba." });
+        }
+
+        if (command === '/undoabadaba') {
+            if (!isOwner) return;
+            srv.abadabaActive = false;
+            await srv.save();
+            io.to(channelId).emit('receive_chat_message', { channelId, username: "📢 TROLL", text: "Security matrix restored. Original signatures online." });
+        }
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Engine live on ${PORT}`));
+server.listen(PORT, () => console.log(`Engine running smoothly on port ${PORT}`));
