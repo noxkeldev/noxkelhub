@@ -149,6 +149,31 @@ app.delete('/api/channels/:serverId/:channelName', async (req, res) => {
     res.json({ success: true });
 });
 
+// FIX FEATURE: PER-SERVER ROOM DELETION (OWNER ONLY)
+app.post('/api/channels/delete-room', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const { serverId, roomName } = req.body;
+
+    try {
+        const srv = await ChatServer.findById(serverId);
+        if (!srv) return res.status(404).json({ success: false, message: "Server not found." });
+        
+        // Check if the running session user is the actual creator/owner of this server
+        if (srv.owner !== req.session.user) {
+            return res.status(403).json({ success: false, message: "Clearance Error: Only the Server Owner can delete custom rooms!" });
+        }
+
+        // Pull the specific room layout completely out of the channels array array
+        await ChatServer.findByIdAndUpdate(serverId, {
+            $pull: { channels: { name: roomName } }
+        });
+
+        res.json({ success: true, message: `Room '${roomName}' successfully cleared.` });
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Internal Engine Error." });
+    }
+});
+
 // MESSAGE MODIFICATION TRACKS (Edit/Delete)
 app.post('/api/messages/edit', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
@@ -262,7 +287,7 @@ app.get('/api/user/pfp/:username', async (req, res) => {
 });
 
 // ==========================================
-// 3. SOCKETS CONTROLLER (WITH ADMIN COMMAND RUNNERS)
+// 3. SOCKETS CONTROLLER (WITH PFPS FIXED)
 // ==========================================
 io.on('connection', (socket) => {
     socket.on('join_channel', (channelId) => { socket.join(channelId); });
@@ -288,14 +313,21 @@ io.on('connection', (socket) => {
 
             // AutoMod Scanner Injection
             if (!isAdmin && currentServer.bannedWords.some(w => text.toLowerCase().includes(w))) {
-                // Legacy automod loop code remains active here
                 return socket.emit('mod_action', { type: 'temp_mute', minutes: 10 });
             }
         }
 
-        const savedMsg = await Message.create({ channelId, username, text, imageUrl });
+        // FIX FEATURE: Locate sender in DB to pull their accurate custom PFP link string
         const senderInfo = await User.findOne({ username: data.username });
-        io.to(channelId).emit('receive_chat_message', { ...savedMsg._doc, pfp: senderInfo ? senderInfo.pfp : "" });
+        const activePfp = senderInfo ? senderInfo.pfp : "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel";
+
+        const savedMsg = await Message.create({ channelId, username, text, imageUrl });
+        
+        // Emit the payload containing the true custom pfp string to the frontend UI
+        io.to(channelId).emit('receive_chat_message', { 
+            ...savedMsg._doc, 
+            pfp: activePfp 
+        });
     });
 
     // COMMANDS PROTOCOL HANDLERS
