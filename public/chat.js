@@ -486,16 +486,83 @@ async function loadDiscoverMainframe() {
 // ==========================================
 async function loadSocialMainframe() {
     switchWorkspaceView('panel-social-deck');
-    const uRes = await fetch(`/api/user/profile/${currentUsername}`);
-    // Custom query user raw schema data arrays from backend directly
-    const rawUserRes = await fetch(`/api/user/profile/${currentUsername}`);
-    // Interface rendering for friends arrays
+    
     const reqBox = document.getElementById('social-requests-box');
     const friendBox = document.getElementById('social-friends-box');
+    
     reqBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>Scanning request logs...</p>";
-    friendBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>No direct active pipelines.</p>";
+    friendBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>Scanning active pipelines...</p>";
+
+    try {
+        // Fetch the user's live profile data containing friends and pending requests arrays
+        const res = await fetch(`/api/user/profile/${currentUsername}`);
+        const data = await res.json();
+
+        // 1. RENDER PENDING INCOMING FRIEND REQUESTS
+        reqBox.innerHTML = "";
+        // Checks if backend sends a pending requests array (adjust key name if your backend uses 'incomingRequests' or 'requests')
+        const pendingRequests = data.pendingRequests || []; 
+        
+        if (pendingRequests.length === 0) {
+            reqBox.innerHTML = "<p style='font-size:0.75rem; color:#666;'>No pending synchronization queries.</p>";
+        } else {
+            pendingRequests.forEach(sender => {
+                const row = document.createElement('div');
+                row.className = "matrix-card";
+                row.style.display = "flex";
+                row.style.justifyContent = "space-between";
+                row.style.alignItems = "center";
+                row.style.margin = "5px 0";
+                row.style.padding = "8px";
+                row.style.background = "#111";
+                row.style.border = "1px solid #333";
+
+                row.innerHTML = `
+                    <span style="font-size:0.85rem; color:#fff;">Incoming: @${sender}</span>
+                    <button class="sys-btn" style="padding:2px 8px; font-size:0.75rem;" onclick="acceptFriendPipeline('${sender}')">ACCEPT</button>
+                `;
+                reqBox.appendChild(row);
+            });
+        }
+
+        // 2. RENDER ACTIVE FRIENDS LIST
+        friendBox.innerHTML = "";
+        const friendsList = data.friends || [];
+        
+        if (friendsList.length === 0) {
+            friendBox.innerHTML = "<p style='font-size:0.75rem; color:#666;'>No direct active pipelines established.</p>";
+        } else {
+            friendsList.forEach(friend => {
+                const div = document.createElement('div');
+                div.style.padding = "5px 0";
+                div.style.color = "#00ff55"; // Clean hacker green for verified friends
+                div.style.fontIndex = "0.85rem";
+                div.innerText = `• @${friend} [SECURE CONNECTION]`;
+                friendBox.appendChild(div);
+            });
+        }
+
+    } catch (err) {
+        console.error("Failed to load social mainframe matrices:", err);
+        reqBox.innerHTML = "<p style='font-size:0.75rem; color:#ff0055;'>CRITICAL TRACK READ ERROR</p>";
+    }
 }
 
+// NEW HANDLER: FIRES THE ACCEPT ANCHOR TO THE BACKEND
+async function acceptFriendPipeline(senderUsername) {
+    const res = await fetch('/api/social/accept-friend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUser: senderUsername })
+    });
+    
+    if (res.ok) {
+        alert(`SYSTEM: Friendship synchronization signed with @${senderUsername}!`);
+        loadSocialMainframe(); // Refresh boxes instantly
+    } else {
+        alert("ERROR: Failed to establish secure friend bridge.");
+    }
+}
 // ==========================================
 // 10. ACCOUNT PROFILE PARAMETERS STORAGE MOTOR
 // ==========================================
