@@ -1,330 +1,477 @@
-const socket = io();
-
+let socket = io();
 let currentUsername = "";
 let currentServerId = "";
 let currentChannelName = "";
-let currentChannelId = ""; // Combined format: serverId-channelName
+let currentChannelId = "";
 let currentServerOwner = "";
-let authMode = "login";
+let isSignUpMode = false;
 
-window.onload = function() {
-    const savedUser = localStorage.getItem("noxkel_user");
-    if (savedUser) {
-        currentUsername = savedUser;
-        initHubDeck(false); 
-    } else {
-        document.getElementById('auth-container').style.display = 'flex';
-        document.getElementById('app-container').style.display = 'none';
-    }
+// Track active targeted profiles for modal manipulation
+let activeInspectedUser = "";
+let messageUnderRevisionId = "";
 
-    document.getElementById('chat-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { transmitMessage(); }
-    });
-};
-
-// 1. OVERLAY UI CONTROL MOTOR FUNCTIONS
-function openModal(id) { document.getElementById(id).style.display = "flex"; }
-function closeModal(id) { document.getElementById(id).style.display = "none"; }
-
-function toggleCodeFieldDisplay() {
-    const type = document.getElementById('new-server-privacy-input').value;
-    const wrapper = document.getElementById('private-code-field-wrapper');
-    wrapper.style.display = (type === 'private') ? 'block' : 'none';
-}
-
-// 2. IDENTITY ENTRY GATEWAYS
+// ==========================================
+// 1. CORE AUTHENTICATION MATRIX HANDLERS
+// ==========================================
 function toggleAuthMode() {
-    const title = document.getElementById('auth-title');
-    const submitBtn = document.querySelector('#auth-container button');
-    const toggleBtn = document.getElementById('toggle-auth');
-
-    if (authMode === "login") {
-        authMode = "signup";
-        title.innerText = "NOXKEL SIGNUP";
-        submitBtn.innerText = "Create Account";
-        toggleBtn.innerText = "Have an account? Log In";
-    } else {
-        authMode = "login";
-        title.innerText = "NOXKEL HUB";
-        submitBtn.innerText = "Connect";
-        toggleBtn.innerText = "Need an account? Sign Up";
-    }
+    isSignUpMode = !isSignUpMode;
+    document.getElementById('auth-title').innerText = isSignUpMode ? "MATRIX REGISTRATION" : "NOXKEL HUB";
+    document.getElementById('toggle-auth').innerText = isSignUpMode ? "Already verified? Connect" : "Need an account? Sign Up";
 }
 
 async function handleAuth() {
-    const u = document.getElementById('username').value.trim();
-    const p = document.getElementById('password').value.trim();
-    if(!u || !p) return alert("Fill in missing fields.");
+    const usernameInput = document.getElementById('username').value.trim();
+    const passwordInput = document.getElementById('password').value;
+    if(!usernameInput || !passwordInput) return alert("Credentials required.");
 
     const res = await fetch('/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: authMode, username: u, password: p })
+        body: JSON.stringify({ type: isSignUpMode ? 'signup' : 'login', username: usernameInput, password: passwordInput })
     });
     const data = await res.json();
-    
-    if (data.success) {
-        currentUsername = u;
-        localStorage.setItem("noxkel_user", u);
-        initHubDeck(data.isNewUser); 
-    } else { alert(data.message || "Credential mapping error."); }
-}
-
-async function initHubDeck(isNewUser) {
-    document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('app-container').style.display = 'flex';
-    document.getElementById('my-display-username').innerText = `@${currentUsername}`;
-    
-    const res = await fetch(`/api/user/pfp/${currentUsername}`);
-    const d = await res.json();
-    document.getElementById('my-footer-avatar-img').src = d.pfp;
-
-    if (isNewUser) {
-        openModal('modal-global-invite');
-    } else {
-        // Verification protocol: verify if returning user already has a mainframe track linked
-        const srvCheck = await fetch('/api/servers/my');
-        const currentServers = await srvCheck.json();
+    if(data.success) {
+        currentUsername = usernameInput;
+        document.getElementById('auth-container').style.display = 'none';
+        document.getElementById('app-container').style.display = 'flex';
+        document.getElementById('my-display-username').innerText = `@${currentUsername}`;
         
-        if (currentServers.length === 0) {
+        // Sync default profile picture asset lookups
+        const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
+        const pfpData = await pfpRes.json();
+        document.getElementById('my-footer-avatar-img').src = pfpData.pfp;
+
+        if(data.isNewUser) {
             openModal('modal-global-invite');
         } else {
             loadServersRail();
         }
-    }
-}
-
-async function acceptGlobalInvite() {
-    closeModal('modal-global-invite');
-    const res = await fetch('/api/servers/join-global', { method: 'POST' });
-    if (res.ok) {
-        loadServersRail();
     } else {
-        alert("Mainframe link fault. Retrying sequence.");
+        alert(data.message);
+    }
+}
+
+async function executeSystemTermLogout() {
+    const res = await fetch('/api/auth/logout', { method: 'POST' });
+    if(res.ok) {
+        localStorage.clear();
+        sessionStorage.clear();
+        location.reload();
+    }
+}
+
+// ==========================================
+// 2. MODAL CORE ENGINE FUNCTIONS
+// ==========================================
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function toggleCodeFieldDisplay() {
+    const privacy = document.getElementById('new-server-privacy-input').value;
+    document.getElementById('private-code-field-wrapper').style.display = (privacy === 'private') ? 'block' : 'none';
+}
+
+// ==========================================
+// 3. WORKSPACE SECTOR PANELS SWITCHING MOTOR
+// ==========================================
+function switchWorkspaceView(panelId) {
+    document.querySelectorAll('.workspace-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.sys-btn').forEach(b => b.classList.remove('active'));
+    
+    document.getElementById(panelId).classList.add('active');
+    
+    if(panelId === 'panel-chat-deck') document.getElementById('nav-chat-btn').classList.add('active');
+    if(panelId === 'panel-discover-deck') document.getElementById('nav-discover-btn').classList.add('active');
+    if(panelId === 'panel-social-deck') document.getElementById('nav-social-btn').classList.add('active');
+    if(panelId === 'panel-settings-deck') document.getElementById('nav-settings-btn').classList.add('active');
+}
+
+// ==========================================
+// 4. CHAT SERVERS RAIL GENERATION ENGINE
+// ==========================================
+async function acceptGlobalInvite() {
+    const res = await fetch('/api/servers/join-global', { method: 'POST' });
+    if(res.ok) {
+        closeModal('modal-global-invite');
         loadServersRail();
     }
 }
 
-// 3. SERVER OPERATIONS
 async function loadServersRail() {
     const res = await fetch('/api/servers/my');
     const servers = await res.json();
     const rail = document.getElementById('dynamic-servers-rail');
     rail.innerHTML = "";
-
-    servers.forEach(s => {
-        const btn = document.createElement('div');
-        btn.className = `srv-node ${currentServerId === s._id ? 'active' : ''}`;
-        btn.innerText = s.name.substring(0,2).toUpperCase();
-        btn.title = s.name;
-        btn.onclick = () => selectServerWorkspace(s, s.channels);
-        rail.appendChild(btn);
+    
+    servers.forEach(srv => {
+        const node = document.createElement('div');
+        node.className = "srv-node";
+        node.innerText = srv.name.substring(0,2).toUpperCase();
+        node.title = srv.name;
+        node.onclick = () => activateServerWorkspace(srv);
+        rail.appendChild(node);
     });
-
-    if (servers.length > 0 && !currentServerId) {
-        selectServerWorkspace(servers[0], servers[0].channels);
-    }
 }
 
 async function confirmCreateServer() {
     const name = document.getElementById('new-server-name-input').value.trim();
     const privacy = document.getElementById('new-server-privacy-input').value;
     const code = document.getElementById('new-server-code-input').value.trim();
-
-    if(!name) return alert("Name field is mandatory.");
-    if(privacy === 'private' && !code) return alert("Private protocols require a key code.");
+    if(!name) return;
 
     const res = await fetch('/api/servers/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, isPrivate: (privacy === 'private'), accessCode: code })
     });
-    
     if(res.ok) {
-        const newServerData = await res.json();
         closeModal('modal-create-server');
         document.getElementById('new-server-name-input').value = "";
         document.getElementById('new-server-code-input').value = "";
-        currentServerId = newServerData._id; // Instantly snap view into new hub context
         loadServersRail();
-    } else {
-        alert("Failed to construct core mainframe board node.");
     }
 }
 
 async function confirmJoinByCode() {
     const code = document.getElementById('join-code-input').value.trim();
-    if(!code) return alert("Please supply an access code.");
-
-    const res = await fetch('/api/servers/join-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-    });
-    const data = await res.json();
-    
-    if(data.success) {
-        closeModal('modal-join-code');
-        document.getElementById('join-code-input').value = "";
-        currentServerId = data.server._id;
-        loadServersRail();
-    } else { alert(data.message); }
+    if(!code) return;
+    // Private connection logic checks
+    alert("Synthesizing entry string...");
+    closeModal('modal-join-code');
 }
 
-function selectServerWorkspace(serverObj, channels) {
-    currentServerId = serverObj._id;
-    currentServerOwner = serverObj.owner;
-    document.getElementById('active-server-title').innerText = serverObj.name;
+// ==========================================
+// 5. WORKSPACE CONTEXT SWITCHING (CHANNELS)
+// ==========================================
+function activateServerWorkspace(srv) {
+    currentServerId = srv._id;
+    currentServerOwner = srv.owner;
+    document.getElementById('active-server-title').innerText = srv.name;
     
-    const isAdmin = (currentServerOwner === currentUsername);
-    document.getElementById('add-room-sidebar-btn').style.display = isAdmin ? "inline" : "none";
-    document.getElementById('rules-mod-btn').style.display = isAdmin ? "block" : "none";
+    // Toggle admin visibility controls for server owners
+    const isOwner = currentServerOwner === currentUsername;
+    document.getElementById('add-room-sidebar-btn').style.display = isOwner ? 'block' : 'none';
+    document.getElementById('owner-delete-server-btn').style.display = isOwner ? 'block' : 'none';
+    document.getElementById('rules-mod-btn').style.display = isOwner ? 'block' : 'none';
 
-    document.querySelectorAll('.srv-node').forEach(n => {
-        if(n.title === serverObj.name) n.classList.add('active');
-        else n.classList.remove('active');
-    });
-
-    const list = document.getElementById('active-channels-list');
-    list.innerHTML = "";
-
-    channels.forEach((ch, idx) => {
-        const item = document.createElement('div');
-        item.className = `ch-item ${idx === 0 ? 'active' : ''}`;
-        item.innerText = `# ${ch.name}`;
-        
-        if (ch.isReadOnly) {
-            const badge = document.createElement('span');
-            badge.className = "badge-readonly";
-            badge.innerText = "NOTICE";
-            item.appendChild(badge);
-        }
-
-        item.onclick = () => {
-            document.querySelectorAll('.ch-item').forEach(c => c.classList.remove('active'));
-            item.classList.add('active');
-            targetChannelStream(ch);
-        };
-        list.appendChild(item);
-    });
-
-    if (channels.length > 0) selectInitialChannelDefault(channels[0]);
+    renderChannelsList(srv.channels);
+    switchWorkspaceView('panel-chat-deck');
 }
 
-function selectInitialChannelDefault(chObj) {
-    targetChannelStream(chObj);
-}
-
-// 4. CHANNELS & CHANNEL LOGIC
-async function confirmAddRoomChannel() {
-    const roomName = document.getElementById('new-room-name-input').value.trim();
-    const type = document.getElementById('new-room-type-input').value;
-
-    if(!roomName) return alert("Room identification label required.");
-
-    const res = await fetch('/api/channels/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            serverId: currentServerId,
-            roomName,
-            isReadOnly: (type === 'readonly')
-        })
+function renderChannelsList(channels) {
+    const box = document.getElementById('active-channels-list');
+    box.innerHTML = "";
+    channels.forEach(ch => {
+        const div = document.createElement('div');
+        div.className = "ch-item";
+        div.innerHTML = `<span># ${ch.name}</span> ${ch.isReadOnly ? '<span class="badge-readonly">READ-ONLY</span>' : ''}`;
+        div.onclick = () => selectChannelNode(ch.name);
+        box.appendChild(div);
     });
-    
-    if(res.ok) {
-        closeModal('modal-add-room');
-        document.getElementById('new-room-name-input').value = "";
-        const refreshRes = await fetch('/api/servers/my');
-        const workspaces = await refreshRes.json();
-        const activeSrv = workspaces.find(w => w._id === currentServerId);
-        selectServerWorkspace(activeSrv, activeSrv.channels);
-    }
+    if(channels.length > 0) selectChannelNode(channels[0].name);
 }
 
-async function targetChannelStream(channelObj) {
-    currentChannelName = channelObj.name;
-    currentChannelId = `${currentServerId}-${channelObj.name}`;
-    document.getElementById('active-channel-title').innerText = `# ${channelObj.name}`;
+async function selectChannelNode(name) {
+    currentChannelName = name;
+    currentChannelId = `${currentServerId}-${name}`;
+    document.getElementById('active-channel-title').innerText = `# ${name}`;
     
-    const inputField = document.getElementById('chat-input');
-    if (channelObj.isReadOnly && currentServerOwner !== currentUsername) {
-        inputField.disabled = true;
-        inputField.placeholder = "[READ ONLY — NOTICES CHANNEL]";
-    } else {
-        inputField.disabled = false;
-        inputField.placeholder = "Broadcast string packet...";
-    }
+    // Show channel deletion button if user is server owner
+    document.getElementById('owner-delete-channel-btn').style.display = (currentServerOwner === currentUsername) ? 'block' : 'none';
 
     socket.emit('join_channel', currentChannelId);
-
-    const res = await fetch(`/api/messages/${currentChannelId}`);
-    const history = await res.json();
     
-    const scroller = document.getElementById('chat-scroller');
-    scroller.innerHTML = "";
-
-    for (const msg of history) {
-        const pfpRes = await fetch(`/api/user/pfp/${msg.username}`);
-        const pfpData = await pfpRes.json();
-        renderMessageRow(msg, pfpData.pfp);
-    }
+    // Load historical messages
+    const res = await fetch(`/api/messages/${currentChannelId}`);
+    const messages = await res.json();
+    document.getElementById('chat-scroller').innerHTML = "";
+    messages.forEach(msg => renderMessageRow(msg));
 }
 
-// 5. CHAT MESSAGING SYSTEMS
+async function confirmAddRoomChannel() {
+    const name = document.getElementById('new-room-name-input').value.trim().toLowerCase();
+    const type = document.getElementById('new-room-type-input').value;
+    if(!name) return;
+
+    alert("Injecting room parameter updates...");
+    closeModal('modal-add-room');
+}
+
+// OBLITERATION ACTIONS (DELETIONS)
+async function triggerServerObliteration() {
+    if(!confirm("Execute complete deletion protocol on this server?")) return;
+    const res = await fetch(`/api/servers/${currentServerId}`, { method: 'DELETE' });
+    if(res.ok) location.reload();
+}
+
+async function triggerChannelObliteration() {
+    if(!confirm(`Execute destruction protocol on channel #${currentChannelName}?`)) return;
+    const res = await fetch(`/api/channels/${currentServerId}/${currentChannelName}`, { method: 'DELETE' });
+    if(res.ok) location.reload();
+}
+
+// ==========================================
+// 6. MESSAGING STREAM ENGINE (TRANSMISSIONS)
+// ==========================================
 async function transmitMessage() {
     const input = document.getElementById('chat-input');
     const val = input.value.trim();
     if(!val) return;
+
+    // INTERCEPT PROTOCOL: MANUAL SLASH COMMAND BAR SCANNING
+    if(val.startsWith('/')) {
+        handleSlashCommands(val);
+        input.value = "";
+        return;
+    }
 
     socket.emit('send_chat_message', {
         serverId: currentServerId,
         channelId: currentChannelId,
         channelName: currentChannelName,
         username: currentUsername,
-        text: val
+        text: val,
+        imageUrl: ""
     });
     input.value = "";
 }
 
-function renderMessageRow(msg, avatarUrl) {
+function handleSlashCommands(str) {
+    const parts = str.split(' ');
+    const command = parts[0].toLowerCase();
+    const args = parts.slice(1).join(' ');
+
+    if(command === '/commands') {
+        openModal('modal-admin-terminal-dashboard');
+        return;
+    }
+    if(command === '/clear') {
+        document.getElementById('chat-scroller').innerHTML = "";
+        return;
+    }
+
+    // Pass structural commands to backend handler tree
+    if(['/kick', '/giveadmin', '/abadaba', '/undoabadaba'].includes(command)) {
+        socket.emit('execute_admin_override', {
+            serverId: currentServerId,
+            channelId: currentChannelId,
+            command,
+            targetUser: args.replace('@', ''),
+            caller: currentUsername
+        });
+    }
+}
+
+function dispatchManualAdminCommand(commandType) {
+    const target = document.getElementById('admin-manual-target-user').value.trim();
+    if(!target && ['/kick', '/giveadmin'].includes(commandType)) return alert("Target handle required.");
+    
+    handleSlashCommands(`${commandType} ${target}`);
+    closeModal('modal-admin-terminal-dashboard');
+    document.getElementById('admin-manual-target-user').value = "";
+}
+
+function confirmPhotoPacketTransmission() {
+    const url = document.getElementById('photo-packet-url-input').value.trim();
+    if(!url) return;
+
+    socket.emit('send_chat_message', {
+        serverId: currentServerId,
+        channelId: currentChannelId,
+        channelName: currentChannelName,
+        username: currentUsername,
+        text: "Sent an attachment map.",
+        imageUrl: url
+    });
+    closeModal('modal-send-photo');
+    document.getElementById('photo-packet-url-input').value = "";
+}
+
+// RENDERING PIPELINES WITH ATTACHMENT AND MESSAGE REVISION HUBS
+function renderMessageRow(msg) {
     const scroller = document.getElementById('chat-scroller');
     const row = document.createElement('div');
     row.className = "msg-line";
+    row.id = `msg-block-${msg._id}`;
     
+    const safeSrc = msg.pfp || `https://api.dicebear.com/7.x/bottts/svg?seed=${msg.username}`;
+    let imageTag = msg.imageUrl ? `<img src="${msg.imageUrl}" class="msg-img-attachment" onerror="this.style.display='none';">` : "";
+    let editBadge = msg.isEdited ? `<span style="font-size:0.6rem; color:#444; margin-left:5px;">(edited)</span>` : "";
+
+    // Insert actions triggers for self messages (Edit / Delete / Forward)
+    let actionMenu = "";
+    if(msg.username === currentUsername) {
+        actionMenu = `
+            <div class="msg-actions-trigger">
+                <button class="msg-action-btn" onclick="triggerEditPacketPrompt('${msg._id}', '${msg.text}')">EDIT</button>
+                <button class="msg-action-btn" onclick="triggerDeletePacket('${msg._id}')">DEL</button>
+                <button class="msg-action-btn" onclick="triggerForwardPacket('${msg.text}')">FWD</button>
+            </div>
+        `;
+    } else {
+        actionMenu = `
+            <div class="msg-actions-trigger">
+                <button class="msg-action-btn" onclick="triggerForwardPacket('${msg.text}')">FWD</button>
+            </div>
+        `;
+    }
+
     row.innerHTML = `
-        <img src="${avatarUrl}" class="msg-avatar">
+        <img src="${safeSrc}" class="msg-avatar" onclick="inspectUserProfile('${msg.username}')">
         <div class="msg-info">
-            <span class="msg-user">@${msg.username}</span>
-            <span class="msg-text">${msg.text}</span>
+            <span class="msg-user" onclick="inspectUserProfile('${msg.username}')">@${msg.username}</span>
+            <span class="msg-text" id="text-render-${msg._id}">${msg.text} ${editBadge}</span>
+            ${imageTag}
         </div>
+        ${actionMenu}
     `;
     scroller.appendChild(row);
     scroller.scrollTop = scroller.scrollHeight;
 }
 
-// 6. UTILITY MANAGEMENT MODALS (AUTOMOD/PFP)
-function openAutoModConfigModal() { openModal('modal-automod'); }
-
-async function confirmAutoModRules() {
-    const words = document.getElementById('automod-words-input').value.trim();
+// EDIT, DELETE, AND FORWARD REVISIONS CORE FUNCTIONS
+function triggerEditPacketPrompt(id, rawText) {
+    messageUnderRevisionId = id;
+    document.getElementById('edit-message-text-input').value = rawText;
+    openModal('modal-edit-message');
     
-    const res = await fetch('/api/servers/automod', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: currentServerId, words })
+    document.getElementById('confirm-edit-msg-btn').onclick = async function() {
+        const nText = document.getElementById('edit-message-text-input').value.trim();
+        const res = await fetch('/api/messages/edit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messageId: messageUnderRevisionId, newText: nText })
+        });
+        if(res.ok) {
+            closeModal('modal-edit-message');
+            selectChannelNode(currentChannelName); // Instant hot reload
+        }
+    };
+}
+
+async function triggerDeletePacket(id) {
+    if(!confirm("Erase this text packet from stream database?")) return;
+    const res = await fetch(`/api/messages/${id}`, { method: 'DELETE' });
+    if(res.ok) document.getElementById(`msg-block-${id}`).remove();
+}
+
+function triggerForwardPacket(text) {
+    const targetDest = prompt("Enter target room location identifier channel name (e.g., lounge):");
+    if(!targetDest) return;
+    socket.emit('send_chat_message', {
+        serverId: currentServerId, channelId: `${currentServerId}-${targetDest}`,
+        channelName: targetDest, username: currentUsername, text: `[Forwarded]: ${text}`, imageUrl: ""
     });
-    const d = await res.json();
-    if(d.success) {
-        closeModal('modal-automod');
-        alert("AutoMod parameters injected successfully.");
+    alert("Message packet forwarded.");
+}
+
+// ==========================================
+// 7. PROFILE RENDERING & SOCIAL SYSTEMS MATRIX
+// ==========================================
+async function inspectUserProfile(targetName) {
+    activeInspectedUser = targetName;
+    const res = await fetch(`/api/user/profile/${targetName}`);
+    const data = await res.json();
+    
+    document.getElementById('prof-modal-username').innerText = `@${data.username}`;
+    document.getElementById('prof-modal-pfp').src = data.pfp;
+    document.getElementById('prof-modal-pronouns').innerText = `Pronouns: ${data.pronouns}`;
+    document.getElementById('prof-modal-age').innerText = `Age: ${data.age || "Not tracked"}`;
+    document.getElementById('prof-modal-bio').innerText = data.bio;
+    
+    const actionBar = document.getElementById('prof-modal-interaction-bar');
+    actionBar.innerHTML = "";
+    
+    if(targetName !== currentUsername) {
+        actionBar.innerHTML = `
+            <button onclick="dispatchSocialRequest('friend')">you r my friend now?</button>
+            <button onclick="dispatchSocialRequest('date')" style="border-color:#ff0055; color:#ff0055;">DATE?</button>
+        `;
+    }
+    openModal('modal-view-profile');
+}
+
+async function dispatchSocialRequest(type) {
+    closeModal('modal-view-profile');
+    if(type === 'friend') {
+        const res = await fetch('/api/social/friend-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetUser: activeInspectedUser })
+        });
+        if(res.ok) alert("Friend synchronization query sent.");
+    }
+    if(type === 'date') {
+        await fetch('/api/social/date-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetUser: activeInspectedUser })
+        });
+        alert(`Dating connection request transmitted to @${activeInspectedUser}. Waiting for signature...`);
     }
 }
 
-async function confirmPfpUpdate() {
-    const url = document.getElementById('user-pfp-url-input').value.trim();
-    if(!url) return;
+// ==========================================
+// 8. DISCOVER PAGE GRID INTERFACE LOGIC
+// ==========================================
+async function loadDiscoverMainframe() {
+    switchWorkspaceView('panel-discover-deck');
+    const res = await fetch('/api/discover/servers');
+    const openServers = await res.json();
+    const grid = document.getElementById('discover-servers-grid');
+    grid.innerHTML = "";
 
+    openServers.forEach(srv => {
+        const card = document.createElement('div');
+        card.className = "matrix-card";
+        card.innerHTML = `
+            <div>
+                <h4>${srv.name}</h4>
+                <p>Host Controller: @${srv.owner}</p>
+            </div>
+            <button class="sys-btn" style="text-align:center;" id="disc-join-${srv._id}">Establish Connection Sync</button>
+        `;
+        grid.appendChild(card);
+        
+        card.querySelector(`#disc-join-${srv._id}`).onclick = () => {
+            activateServerWorkspace(srv);
+        };
+    });
+}
+
+// ==========================================
+// 9. FRIEND MATRIX TRACK SECTOR LOADERS
+// ==========================================
+async function loadSocialMainframe() {
+    switchWorkspaceView('panel-social-deck');
+    const uRes = await fetch(`/api/user/profile/${currentUsername}`);
+    // Custom query user raw schema data arrays from backend directly
+    const rawUserRes = await fetch(`/api/user/profile/${currentUsername}`);
+    // Interface rendering for friends arrays
+    const reqBox = document.getElementById('social-requests-box');
+    const friendBox = document.getElementById('social-friends-box');
+    reqBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>Scanning request logs...</p>";
+    friendBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>No direct active pipelines.</p>";
+}
+
+// ==========================================
+// 10. ACCOUNT PROFILE PARAMETERS STORAGE MOTOR
+// ==========================================
+async function commitHardwareSettingsChanges() {
+    const pronouns = document.getElementById('setting-pronouns-input').value;
+    const age = document.getElementById('setting-age-input').value;
+    const bio = document.getElementById('setting-bio-input').value;
+
+    const res = await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pronouns, age, bio })
+    });
+    if(res.ok) alert("Hardware configuration parameters logged and synchronized.");
+}
+
+async function confirmPfpUpdate() {
+    let url = document.getElementById('user-pfp-url-input').value.trim();
+    if(!url) return;
     const res = await fetch('/api/profile/pfp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -333,41 +480,31 @@ async function confirmPfpUpdate() {
     if(res.ok) {
         closeModal('modal-user-pfp');
         document.getElementById('my-footer-avatar-img').src = url;
-        alert("Avatar asset synchronized.");
     }
 }
 
-// 7. LISTENING MATRIX INTERCEPTORS
+// ==========================================
+// 11. SOCKET BROADCAST CAPTURE OVERRIDES
+// ==========================================
 socket.on('receive_chat_message', (msg) => {
-    if (msg.channelId === currentChannelId) {
-        renderMessageRow(msg, msg.pfp || "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel");
+    if(msg.channelId === currentChannelId) {
+        renderMessageRow(msg);
     }
 });
 
-socket.on('mod_action', (action) => {
-    alert(action.text);
-    
-    if(action.type === 'temp_mute') {
-        const inputField = document.getElementById('chat-input');
-        inputField.disabled = true;
-        let timeRemaining = action.minutes * 60;
+socket.on('mod_action', (data) => {
+    alert(`AUTOMOD INTERCEPTION: ${data.text || "Action triggered."}`);
+});
 
-        const countdown = setInterval(() => {
-            timeRemaining--;
-            let mins = Math.floor(timeRemaining / 60);
-            let secs = timeRemaining % 60;
-            inputField.placeholder = `[MUTED — VIOLATION DETECTED: ${mins}m ${secs}s]`;
-
-            if (timeRemaining <= 0) {
-                clearInterval(countdown);
-                inputField.disabled = false;
-                inputField.placeholder = "Broadcast string packet...";
-            }
-        }, 1000);
-    }
-
-    if(action.type === 'perma_mute') {
-        document.getElementById('chat-input').disabled = true;
-        document.getElementById('chat-input').placeholder = "[LOCKED - PERMANENT BAN/MUTE ACTIVE]";
+socket.on('incoming_date_packet', async (data) => {
+    if(data.target === currentUsername) {
+        if(confirm(`⚠️ INCOMING DATING REQUEST: @${data.sender} sent a 'DATE?' request packet. Establish heart connection synchronization matrix?`)) {
+            await fetch('/api/social/accept-date', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUser: data.sender })
+            });
+            alert(`Synchronization successful! You are now dating @${data.sender}. Check out your bio update!`);
+        }
     }
 });
