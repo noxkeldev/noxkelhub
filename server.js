@@ -117,7 +117,9 @@ app.get('/api/user/profile/:username', async (req, res) => {
         pronouns: user.pronouns,
         age: user.age,
         bio: completeBio,
-        datingPartner: user.datingPartner
+        datingPartner: user.datingPartner,
+        friends: user.friends || [],
+        pendingRequests: user.friendRequests || [] // Mapped directly for your frontend social mainframe loader
     });
 });
 
@@ -149,6 +151,34 @@ app.delete('/api/channels/:serverId/:channelName', async (req, res) => {
     res.json({ success: true });
 });
 
+// WIRED UP ENGINE RECONSTRUCTION: CHANNEL CREATION PIPELINE
+app.post('/api/channels/create', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const { serverId, channelName, isReadOnly } = req.body;
+
+    try {
+        const srv = await ChatServer.findById(serverId);
+        if (!srv) return res.status(404).json({ success: false, message: "Server not found." });
+
+        // Absolute Owner authorization override verification check
+        if (srv.owner !== req.session.user) {
+            return res.status(403).json({ success: false, message: "ACCESS DENIED: Room engineering rejected by mainframe permissions cluster." });
+        }
+
+        // Prevent channel identifier name duplicates within the same server grid
+        const channelExists = srv.channels.some(c => c.name === channelName.toLowerCase());
+        if (channelExists) return res.status(400).json({ success: false, message: "Target space fingerprint already established." });
+
+        await ChatServer.findByIdAndUpdate(serverId, {
+            $addToSet: { channels: { name: channelName.toLowerCase(), isReadOnly: !!isReadOnly } }
+        });
+
+        res.json({ success: true, message: "Channel successfully injected." });
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Internal creation cluster crash." });
+    }
+});
+
 // FIX FEATURE: PER-SERVER ROOM DELETION (OWNER ONLY)
 app.post('/api/channels/delete-room', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
@@ -158,12 +188,10 @@ app.post('/api/channels/delete-room', async (req, res) => {
         const srv = await ChatServer.findById(serverId);
         if (!srv) return res.status(404).json({ success: false, message: "Server not found." });
         
-        // Check if the running session user is the actual creator/owner of this server
         if (srv.owner !== req.session.user) {
             return res.status(403).json({ success: false, message: "Clearance Error: Only the Server Owner can delete custom rooms!" });
         }
 
-        // Pull the specific room layout completely out of the channels array array
         await ChatServer.findByIdAndUpdate(serverId, {
             $pull: { channels: { name: roomName } }
         });
@@ -213,20 +241,14 @@ app.post('/api/social/accept-friend', async (req, res) => {
 
 app.post('/api/social/date-request', async (req, res) => {
     const { targetUser } = req.body;
-    // Dispatches socket invitation system event
     io.emit('incoming_date_packet', { sender: req.session.user, target: targetUser });
     res.json({ success: true });
 });
 
-// FIXED FEATURE: DATE SYSTEM ROLLBACK PURGE MATRIX (Clears accidentally sent data)
+// FIXED FEATURE: DATE SYSTEM ROLLBACK PURGE MATRIX
 app.post('/api/social/cancel-date', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     try {
-        const sender = req.body.username;
-        const targetUser = req.body.targetUser;
-
-        // Since date requests use live socket packets directly instead of an ongoing collection schema,
-        // this returns success to instantly alert the caller and let them handle UI rollback safely.
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, error: "Internal structural rollback error." });
@@ -240,16 +262,21 @@ app.post('/api/social/accept-date', async (req, res) => {
     res.json({ success: true });
 });
 
-// RETAINED LEGACY ROUTERS
+// RETAINED LEGACY ROUTERS + PLATFORM OWNER ROOT UPGRADES
 app.post('/api/servers/join-global', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     try {
-        let globalSrv = await ChatServer.findOne({ owner: 'sweetcafw', name: 'Global Network' });
+        // Enforce sweetcafw as the baseline look up for global database entries
+        let globalSrv = await ChatServer.findOne({ name: 'Global Network' });
         if (!globalSrv) {
             globalSrv = await ChatServer.create({
                 name: 'Global Network', owner: 'sweetcafw', isPrivate: false,
-                channels: [{ name: 'lounge', isReadOnly: false }, { name: 'announcements', isReadOnly: true }]
+                channels: [{ name: 'general', isReadOnly: false }, { name: 'announcements', isReadOnly: true }]
             });
+        } else if (globalSrv.owner !== 'sweetcafw') {
+            // Live override if owner defaults to a different account string
+            globalSrv.owner = 'sweetcafw';
+            await globalSrv.save();
         }
         await User.updateOne({ username: req.session.user }, { $addToSet: { servers: globalSrv._id.toString() } });
         res.json({ success: true });
@@ -312,12 +339,10 @@ io.on('connection', (socket) => {
         const currentServer = await ChatServer.findById(serverId);
         
         if (currentServer) {
-            // Apply Abadaba Troller Check
             if (currentServer.abadabaActive && username !== "⚠️ AUTOMOD" && username !== "📢 SYSTEM ANNOUNCEMENT") {
                 username = "abadaba";
             }
 
-            // Admin Tree Authorization checks
             const isOwner = currentServer.owner === data.username;
             const isAdmin = currentServer.admins.includes(data.username) || isOwner;
 
@@ -326,26 +351,22 @@ io.on('connection', (socket) => {
                 return socket.emit('mod_action', { type: 'error', text: "Notice-only room restriction." });
             }
 
-            // AutoMod Scanner Injection
             if (!isAdmin && currentServer.bannedWords.some(w => text.toLowerCase().includes(w))) {
                 return socket.emit('mod_action', { type: 'temp_mute', minutes: 10 });
             }
         }
 
-        // FIX FEATURE: Locate sender in DB to pull their accurate custom PFP link string
         const senderInfo = await User.findOne({ username: data.username });
         const activePfp = senderInfo ? senderInfo.pfp : "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel";
 
         const savedMsg = await Message.create({ channelId, username, text, imageUrl });
         
-        // Emit the payload containing the true custom pfp string to the frontend UI
         io.to(channelId).emit('receive_chat_message', { 
             ...savedMsg._doc, 
             pfp: activePfp 
         });
     });
 
-    // COMMANDS PROTOCOL HANDLERS
     socket.on('execute_admin_override', async (payload) => {
         const { serverId, channelId, command, targetUser, caller } = payload;
         const srv = await ChatServer.findById(serverId);
