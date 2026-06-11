@@ -238,7 +238,7 @@ async function transmitMessage() {
 function handleSlashCommands(str) {
     const parts = str.split(' ');
     const command = parts[0].toLowerCase();
-    const args = parts.slice(1).join(' ');
+    const args = parts.slice(1).join(' ').trim();
 
     if(command === '/commands') {
         openModal('modal-admin-terminal-dashboard');
@@ -246,6 +246,49 @@ function handleSlashCommands(str) {
     }
     if(command === '/clear') {
         document.getElementById('chat-scroller').innerHTML = "";
+        return;
+    }
+
+    // FEATURE 1: DATE MATRIX ROLLBACK INTERCEPTOR
+    if(command === '/rollbackdaterequest') {
+        const target = args.replace('@', '').trim();
+        if(!target) return alert("CRITICAL ERROR: Specify a target user handle to execute rollback.");
+
+        fetch('/api/social/cancel-date', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: currentUsername, targetUser: target })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                alert(`SYSTEM: Transmission aborted. Date request sent to @${target} has been purged.`);
+            } else {
+                alert("ERROR: Mainframe failed to purge packet.");
+            }
+        })
+        .catch(err => console.error("Rollback failed:", err));
+        return;
+    }
+
+    // FEATURE 2: ROOM OBLITERATION VIA SLASH COMMAND
+    if(command === '/deleteroom') {
+        const targetRoom = args.replace('#', '').trim();
+        if(!targetRoom) return alert("CRITICAL ERROR: Specify a custom channel name to delete.");
+        if(currentServerOwner !== currentUsername) return alert("ACCESS DENIED: Only the Server Owner can execute channel terminations.");
+
+        if(!confirm(`Execute terminal destruction command on channel #${targetRoom}?`)) return;
+
+        fetch(`/api/channels/${currentServerId}/${targetRoom}`, { method: 'DELETE' })
+        .then(res => {
+            if(res.ok) {
+                alert(`SYSTEM: Channel #${targetRoom} data signature wiped from node.`);
+                location.reload();
+            } else {
+                alert("ERROR: Destruction route rejected by backend database.");
+            }
+        })
+        .catch(err => console.error("Room destruction failure:", err));
         return;
     }
 
@@ -468,7 +511,7 @@ async function commitHardwareSettingsChanges() {
         body: JSON.stringify({ 
             pronouns, 
             age: ageInputVal ? parseInt(ageInputVal) : null, 
-            bio 
+            bio
         })
     });
     if(res.ok) alert("Hardware configuration parameters logged and synchronized.");
