@@ -458,13 +458,18 @@ async function loadSocialMainframe() {
 // ==========================================
 async function commitHardwareSettingsChanges() {
     const pronouns = document.getElementById('setting-pronouns-input').value;
-    const age = document.getElementById('setting-age-input').value;
+    const ageInputVal = document.getElementById('setting-age-input').value;
     const bio = document.getElementById('setting-bio-input').value;
 
+    // FIXED: Form parses raw string to valid Int data structures before JSON translation
     const res = await fetch('/api/user/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pronouns, age, bio })
+        body: JSON.stringify({ 
+            pronouns, 
+            age: ageInputVal ? parseInt(ageInputVal) : null, 
+            bio 
+        })
     });
     if(res.ok) alert("Hardware configuration parameters logged and synchronized.");
 }
@@ -506,5 +511,18 @@ socket.on('incoming_date_packet', async (data) => {
             });
             alert(`Synchronization successful! You are now dating @${data.sender}. Check out your bio update!`);
         }
+    }
+});
+
+// FIXED: Keydown structural interface interceptor pasted seamlessly at script level base
+document.addEventListener("DOMContentLoaded", () => {
+    const mainChatInput = document.getElementById('chat-input');
+    if (mainChatInput) {
+        mainChatInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault(); 
+                transmitMessage();
+            }
+        });
     }
 });
