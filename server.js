@@ -58,7 +58,16 @@ const Message = mongoose.models.Message || mongoose.model('Message', new mongoos
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(session({ secret: 'super-secret-key', resave: false, saveUninitialized: false }));
+
+// ==========================================
+// FIX: SESSION ENGINE CONFIGURATION LOCK
+// ==========================================
+app.use(session({ 
+    secret: 'super-secret-key', 
+    resave: true,                // FORCED: Prevents session loss on browser reload
+    saveUninitialized: true,     // FORCED: Instantly locks down connection memory allocation
+    cookie: { maxAge: 24 * 60 * 60 * 1000 } // Session token remains valid for 24 hours
+}));
 
 // ==========================================
 // 2. EXISTING & NEW API TRACKS
@@ -71,13 +80,19 @@ app.post('/auth', async (req, res) => {
         try {
             const hashedPassword = await bcrypt.hash(password, 10);
             await User.create({ username, password: hashedPassword });
+            
             req.session.user = username;
+            req.session.save(); // FORCED: Writes session data to server storage instantly before sending response
+            
             res.json({ success: true, isNewUser: true });
         } catch (err) { res.json({ success: false, message: "Username taken!" }); }
     } else {
         const user = await User.findOne({ username });
         if (user && await bcrypt.compare(password, user.password)) {
+            
             req.session.user = username;
+            req.session.save(); // FORCED: Writes session data to server storage instantly before sending response
+            
             res.json({ success: true, isNewUser: false });
         } else { res.json({ success: false, message: "Invalid credentials" }); }
     }
@@ -266,7 +281,6 @@ app.post('/api/social/accept-date', async (req, res) => {
 app.post('/api/servers/join-global', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     try {
-        // Enforce sweetcafw as the baseline look up for global database entries
         let globalSrv = await ChatServer.findOne({ name: 'Global Network' });
         if (!globalSrv) {
             globalSrv = await ChatServer.create({
@@ -274,7 +288,6 @@ app.post('/api/servers/join-global', async (req, res) => {
                 channels: [{ name: 'general', isReadOnly: false }, { name: 'announcements', isReadOnly: true }]
             });
         } else if (globalSrv.owner !== 'sweetcafw') {
-            // Live override if owner defaults to a different account string
             globalSrv.owner = 'sweetcafw';
             await globalSrv.save();
         }
