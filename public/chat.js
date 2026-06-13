@@ -144,7 +144,7 @@ async function confirmJoinByCode() {
 // ==========================================
 async function confirmAddRoomChannel() {
     const name = document.getElementById('new-room-name-input').value.trim().toLowerCase();
-    const type = document.getElementById('new-room-type-input').value; // 'text' or 'voice' / 'read-only' depending on your HTML select dropdown
+    const type = document.getElementById('new-room-type-input').value; 
     if(!name) return alert("CRITICAL ERROR: Room name identifier cannot be blank.");
 
     try {
@@ -154,14 +154,14 @@ async function confirmAddRoomChannel() {
             body: JSON.stringify({
                 serverId: currentServerId,
                 channelName: name,
-                isReadOnly: (type === 'readonly') // If your select option value for read-only is 'readonly'
+                isReadOnly: (type === 'readonly')
             })
         });
 
         if(res.ok) {
             alert(`SYSTEM: Custom room sector #${name} successfully injected into database.`);
             closeModal('modal-add-room');
-            document.getElementById('new-room-name-input').value = ""; // Clear input field
+            document.getElementById('new-room-name-input').value = ""; 
             
             // Hot reload the server workspace instantly so the new channel appears on your sidebar
             const refreshRes = await fetch('/api/servers/my');
@@ -179,6 +179,7 @@ async function confirmAddRoomChannel() {
         alert("ERROR: Failed to establish channel creation handshake stream.");
     }
 }
+
 // ==========================================
 // 6. MESSAGING STREAM ENGINE (TRANSMISSIONS)
 // ==========================================
@@ -310,7 +311,6 @@ function renderMessageRow(msg) {
     let imageTag = msg.imageUrl ? `<img src="${msg.imageUrl}" class="msg-img-attachment" onerror="this.style.display='none';">` : "";
     let editBadge = msg.isEdited ? `<span style="font-size:0.6rem; color:#444; margin-left:5px;">(edited)</span>` : "";
 
-    // Insert actions triggers for self messages (Edit / Delete / Forward)
     let actionMenu = "";
     if(msg.username === currentUsername) {
         actionMenu = `
@@ -356,7 +356,7 @@ function triggerEditPacketPrompt(id, rawText) {
         });
         if(res.ok) {
             closeModal('modal-edit-message');
-            selectChannelNode(currentChannelName); // Instant hot reload
+            selectChannelNode(currentChannelName); 
         }
     };
 }
@@ -464,13 +464,10 @@ async function loadSocialMainframe() {
     friendBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>Scanning active pipelines...</p>";
 
     try {
-        // Fetch the user's live profile data containing friends and pending requests arrays
         const res = await fetch(`/api/user/profile/${currentUsername}`);
         const data = await res.json();
 
-        // 1. RENDER PENDING INCOMING FRIEND REQUESTS
         reqBox.innerHTML = "";
-        // Checks if backend sends a pending requests array (adjust key name if your backend uses 'incomingRequests' or 'requests')
         const pendingRequests = data.pendingRequests || []; 
         
         if (pendingRequests.length === 0) {
@@ -495,7 +492,6 @@ async function loadSocialMainframe() {
             });
         }
 
-        // 2. RENDER ACTIVE FRIENDS LIST
         friendBox.innerHTML = "";
         const friendsList = data.friends || [];
         
@@ -505,7 +501,7 @@ async function loadSocialMainframe() {
             friendsList.forEach(friend => {
                 const div = document.createElement('div');
                 div.style.padding = "5px 0";
-                div.style.color = "#00ff55"; // Clean hacker green for verified friends
+                div.style.color = "#00ff55"; 
                 div.style.fontIndex = "0.85rem";
                 div.innerText = `• @${friend} [SECURE CONNECTION]`;
                 friendBox.appendChild(div);
@@ -518,7 +514,6 @@ async function loadSocialMainframe() {
     }
 }
 
-// NEW HANDLER: FIRES THE ACCEPT ANCHOR TO THE BACKEND
 async function acceptFriendPipeline(senderUsername) {
     const res = await fetch('/api/social/accept-friend', {
         method: 'POST',
@@ -528,11 +523,12 @@ async function acceptFriendPipeline(senderUsername) {
     
     if (res.ok) {
         alert(`SYSTEM: Friendship synchronization signed with @${senderUsername}!`);
-        loadSocialMainframe(); // Refresh boxes instantly
+        loadSocialMainframe(); 
     } else {
         alert("ERROR: Failed to establish secure friend bridge.");
     }
 }
+
 // ==========================================
 // 10. ACCOUNT PROFILE PARAMETERS STORAGE MOTOR
 // ==========================================
@@ -541,7 +537,6 @@ async function commitHardwareSettingsChanges() {
     const ageInputVal = document.getElementById('setting-age-input').value;
     const bio = document.getElementById('setting-bio-input').value;
 
-    // FIXED: Form parses raw string to valid Int data structures before JSON translation
     const res = await fetch('/api/user/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -594,8 +589,11 @@ socket.on('incoming_date_packet', async (data) => {
     }
 });
 
-// FIXED: Keydown structural interface interceptor pasted seamlessly at script level base
-document.addEventListener("DOMContentLoaded", () => {
+// ==========================================
+// 12. INITIALIZATION & SESSION RESTORATION RUNNERS
+// ==========================================
+document.addEventListener("DOMContentLoaded", async () => {
+    // A. Enter key listener interceptor for chat box
     const mainChatInput = document.getElementById('chat-input');
     if (mainChatInput) {
         mainChatInput.addEventListener("keydown", (event) => {
@@ -604,5 +602,47 @@ document.addEventListener("DOMContentLoaded", () => {
                 transmitMessage();
             }
         });
+    }
+
+    // B. 🔥 PERSISTENT SESSION RECOVERY INTERCEPTOR 🔥
+    try {
+        const checkRes = await fetch('/api/auth/check');
+        const checkData = await checkRes.json();
+        
+        if (checkData.loggedIn) {
+            // Re-assign session state back to global runtime variables
+            currentUsername = checkData.username;
+            
+            // Toggle screen layers immediately, skipping authentication box
+            document.getElementById('auth-container').style.display = 'none';
+            document.getElementById('app-container').style.display = 'flex';
+            document.getElementById('my-display-username').innerText = `@${currentUsername}`;
+            
+            // Pull profile assets and refresh current sidebar layout parameters
+            const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
+            const pfpData = await pfpRes.json();
+            document.getElementById('my-footer-avatar-img').src = pfpData.pfp;
+            
+            // Pre-load the servers sidebar rail components
+            loadServersRail();
+            
+            // Auto-fill configuration input panels with their live database info
+            const profileRes = await fetch(`/api/user/profile/${currentUsername}`);
+            const profileData = await profileRes.json();
+            if (profileData) {
+                if (document.getElementById('setting-bio-input')) {
+                    document.getElementById('setting-bio-input').value = profileData.bio || "";
+                }
+                if (document.getElementById('setting-pronouns-input')) {
+                    document.getElementById('setting-pronouns-input').value = profileData.pronouns || "";
+                }
+                if (document.getElementById('setting-age-input') && profileData.age) {
+                    document.getElementById('setting-age-input').value = profileData.age;
+                }
+            }
+            console.log("⚡ SESSION RESTORE PROTOCOL: Secure token match. Welcome back.");
+        }
+    } catch (sessionError) {
+        console.warn("Session scanner idle or backend server offline:", sessionError);
     }
 });
