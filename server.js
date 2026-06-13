@@ -114,8 +114,7 @@ app.post('/api/user/settings', async (req, res) => {
     );
     res.json({ success: true });
 });
-
-// GET PROFILE INFO MATRIX (For clicking on users)
+// GET PROFILE INFO MATRIX (Fixed to include server arrays)
 app.get('/api/user/profile/:username', async (req, res) => {
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json({ error: "User missing" });
@@ -134,9 +133,11 @@ app.get('/api/user/profile/:username', async (req, res) => {
         bio: completeBio,
         datingPartner: user.datingPartner,
         friends: user.friends || [],
-        pendingRequests: user.friendRequests || [] // Mapped directly for your frontend social mainframe loader
+        pendingRequests: user.friendRequests || [],
+        servers: user.servers || [] // 🔥 THE FIX: Injects your server IDs back into the data stream!
     });
 });
+
 
 // DISCOVER PAGE CORE: Pulls all open public nodes
 app.get('/api/discover/servers', async (req, res) => {
