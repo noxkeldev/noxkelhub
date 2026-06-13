@@ -112,6 +112,72 @@ async function loadServersRail() {
     });
 }
 
+// 🔥 INJECTED FIX: The function that handles clicking servers and loading channels!
+async function activateServerWorkspace(srv) {
+    currentServerId = srv._id;
+    currentServerOwner = srv.owner;
+    
+    const titleHeader = document.getElementById('active-server-title-header');
+    if (titleHeader) titleHeader.innerText = srv.name;
+
+    if (srv.channels && srv.channels.length > 0) {
+        renderChannelsList(srv.channels);
+        selectChannelNode(srv.channels[0].name, srv.channels[0]._id);
+    } else {
+        const channelsContainer = document.getElementById('sidebar-channels-list');
+        if (channelsContainer) {
+            channelsContainer.innerHTML = "<p style='font-size:0.75rem; color:#444; padding:10px;'>No channels built.</p>";
+        }
+    }
+    switchWorkspaceView('panel-chat-deck');
+}
+
+// 🔥 INJECTED FIX: Renders channels onto the sidebar
+function renderChannelsList(channels) {
+    const container = document.getElementById('sidebar-channels-list');
+    if (!container) return;
+    container.innerHTML = "";
+
+    channels.forEach(ch => {
+        const row = document.createElement('div');
+        row.className = "channel-row-item";
+        row.style.padding = "5px 10px";
+        row.style.cursor = "pointer";
+        row.style.color = ch._id === currentChannelId ? "#00ff55" : "#aaa";
+        row.innerText = `# ${ch.name || ch.channelName}`;
+        row.onclick = () => selectChannelNode(ch.name || ch.channelName, ch._id);
+        container.appendChild(row);
+    });
+}
+
+// 🔥 INJECTED FIX: Clears screen and loads specific channel logs
+async function selectChannelNode(name, id) {
+    currentChannelName = name;
+    currentChannelId = id;
+
+    // Highlights current active channel row visual styles
+    const container = document.getElementById('sidebar-channels-list');
+    if (container) {
+        container.querySelectorAll('div').forEach(div => {
+            if(div.innerText === `# ${name}`) div.style.color = "#00ff55";
+            else div.style.color = "#aaa";
+        });
+    }
+
+    document.getElementById('chat-scroller').innerHTML = "<p style='font-size:0.75rem; color:#444; padding:10px;'>Fetching secure stream parameters...</p>";
+
+    try {
+        const res = await fetch(`/api/messages/${currentServerId}/${currentChannelId}`);
+        if(res.ok) {
+            const messages = await res.json();
+            document.getElementById('chat-scroller').innerHTML = "";
+            messages.forEach(msg => renderMessageRow(msg));
+        }
+    } catch(err) {
+        console.error("Failed to load channel history packet:", err);
+    }
+}
+
 async function confirmCreateServer() {
     const name = document.getElementById('new-server-name-input').value.trim();
     const privacy = document.getElementById('new-server-privacy-input').value;
@@ -134,7 +200,6 @@ async function confirmCreateServer() {
 async function confirmJoinByCode() {
     const code = document.getElementById('join-code-input').value.trim();
     if(!code) return;
-    // Private connection logic checks
     alert("Synthesizing entry string...");
     closeModal('modal-join-code');
 }
@@ -163,7 +228,6 @@ async function confirmAddRoomChannel() {
             closeModal('modal-add-room');
             document.getElementById('new-room-name-input').value = ""; 
             
-            // Hot reload the server workspace instantly so the new channel appears on your sidebar
             const refreshRes = await fetch('/api/servers/my');
             const servers = await refreshRes.json();
             const currentServerData = servers.find(s => s._id === currentServerId);
@@ -188,7 +252,6 @@ async function transmitMessage() {
     const val = input.value.trim();
     if(!val) return;
 
-    // INTERCEPT PROTOCOL: MANUAL SLASH COMMAND BAR SCANNING
     if(val.startsWith('/')) {
         handleSlashCommands(val);
         input.value = "";
@@ -220,7 +283,6 @@ function handleSlashCommands(str) {
         return;
     }
 
-    // FEATURE 1: DATE MATRIX ROLLBACK INTERCEPTOR
     if(command === '/rollbackdaterequest') {
         const target = args.replace('@', '').trim();
         if(!target) return alert("CRITICAL ERROR: Specify a target user handle to execute rollback.");
@@ -242,7 +304,6 @@ function handleSlashCommands(str) {
         return;
     }
 
-    // FEATURE 2: ROOM OBLITERATION VIA SLASH COMMAND
     if(command === '/deleteroom') {
         const targetRoom = args.replace('#', '').trim();
         if(!targetRoom) return alert("CRITICAL ERROR: Specify a custom channel name to delete.");
@@ -263,7 +324,6 @@ function handleSlashCommands(str) {
         return;
     }
 
-    // Pass structural commands to backend handler tree
     if(['/kick', '/giveadmin', '/abadaba', '/undoabadaba'].includes(command)) {
         socket.emit('execute_admin_override', {
             serverId: currentServerId,
@@ -300,7 +360,6 @@ function confirmPhotoPacketTransmission() {
     document.getElementById('photo-packet-url-input').value = "";
 }
 
-// RENDERING PIPELINES WITH ATTACHMENT AND MESSAGE REVISION HUBS
 function renderMessageRow(msg) {
     const scroller = document.getElementById('chat-scroller');
     const row = document.createElement('div');
@@ -341,7 +400,6 @@ function renderMessageRow(msg) {
     scroller.scrollTop = scroller.scrollHeight;
 }
 
-// EDIT, DELETE, AND FORWARD REVISIONS CORE FUNCTIONS
 function triggerEditPacketPrompt(id, rawText) {
     messageUnderRevisionId = id;
     document.getElementById('edit-message-text-input').value = rawText;
@@ -356,7 +414,7 @@ function triggerEditPacketPrompt(id, rawText) {
         });
         if(res.ok) {
             closeModal('modal-edit-message');
-            selectChannelNode(currentChannelName); 
+            selectChannelNode(currentChannelName, currentChannelId); 
         }
     };
 }
@@ -468,7 +526,8 @@ async function loadSocialMainframe() {
         const data = await res.json();
 
         reqBox.innerHTML = "";
-        const pendingRequests = data.pendingRequests || []; 
+        // 🔥 SCANNER FIX: Fallback to friendRequests if pendingRequests comes up blank
+        const pendingRequests = data.friendRequests || data.pendingRequests || []; 
         
         if (pendingRequests.length === 0) {
             reqBox.innerHTML = "<p style='font-size:0.75rem; color:#666;'>No pending synchronization queries.</p>";
@@ -502,7 +561,7 @@ async function loadSocialMainframe() {
                 const div = document.createElement('div');
                 div.style.padding = "5px 0";
                 div.style.color = "#00ff55"; 
-                div.style.fontIndex = "0.85rem";
+                div.style.fontSize = "0.85rem";
                 div.innerText = `• @${friend} [SECURE CONNECTION]`;
                 friendBox.appendChild(div);
             });
@@ -593,7 +652,6 @@ socket.on('incoming_date_packet', async (data) => {
 // 12. INITIALIZATION & SESSION RESTORATION RUNNERS
 // ==========================================
 document.addEventListener("DOMContentLoaded", async () => {
-    // A. Enter key listener interceptor for chat box
     const mainChatInput = document.getElementById('chat-input');
     if (mainChatInput) {
         mainChatInput.addEventListener("keydown", (event) => {
@@ -604,29 +662,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // B. 🔥 PERSISTENT SESSION RECOVERY INTERCEPTOR 🔥
     try {
         const checkRes = await fetch('/api/auth/check');
         const checkData = await checkRes.json();
         
         if (checkData.loggedIn) {
-            // Re-assign session state back to global runtime variables
             currentUsername = checkData.username;
             
-            // Toggle screen layers immediately, skipping authentication box
             document.getElementById('auth-container').style.display = 'none';
             document.getElementById('app-container').style.display = 'flex';
             document.getElementById('my-display-username').innerText = `@${currentUsername}`;
             
-            // Pull profile assets and refresh current sidebar layout parameters
             const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
             const pfpData = await pfpRes.json();
             document.getElementById('my-footer-avatar-img').src = pfpData.pfp;
             
-            // Pre-load the servers sidebar rail components
             loadServersRail();
             
-            // Auto-fill configuration input panels with their live database info
             const profileRes = await fetch(`/api/user/profile/${currentUsername}`);
             const profileData = await profileRes.json();
             if (profileData) {
