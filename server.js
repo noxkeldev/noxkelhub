@@ -73,6 +73,15 @@ app.use(session({
 // 2. EXISTING & NEW API TRACKS
 // ==========================================
 
+// 🔥 INJECTED FIX: Session persistence validator check route for frontend auto-login
+app.get('/api/auth/check', (req, res) => {
+    if (req.session && req.session.user) {
+        res.json({ loggedIn: true, username: req.session.user });
+    } else {
+        res.json({ loggedIn: false });
+    }
+});
+
 // Existing Authentication Matrix + Session Clear Fixes
 app.post('/auth', async (req, res) => {
     const { type, username, password } = req.body;
@@ -114,6 +123,7 @@ app.post('/api/user/settings', async (req, res) => {
     );
     res.json({ success: true });
 });
+
 // GET PROFILE INFO MATRIX (Fixed to include server arrays)
 app.get('/api/user/profile/:username', async (req, res) => {
     const user = await User.findOne({ username: req.params.username });
@@ -133,6 +143,7 @@ app.get('/api/user/profile/:username', async (req, res) => {
         bio: completeBio,
         datingPartner: user.datingPartner,
         friends: user.friends || [],
+        friendRequests: user.friendRequests || [], // 🔥 EXPLICIT SYNC: Keeping array keys matching database names
         pendingRequests: user.friendRequests || [],
         servers: user.servers || [] // 🔥 THE FIX: Injects your server IDs back into the data stream!
     });
@@ -326,6 +337,13 @@ app.post('/api/servers/automod', async (req, res) => {
     res.json({ success: true });
 });
 
+// 🔥 INJECTED FIX: Multi-parameter fallback route to support frontend selectChannelNode schema calls
+app.get('/api/messages/:serverId/:channelId', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    res.json(await Message.find({ channelId: req.params.channelId }).sort({ timestamp: 1 }).limit(50));
+});
+
+// Retained single parameter route for legacy channel configurations
 app.get('/api/messages/:channelId', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     res.json(await Message.find({ channelId: req.params.channelId }).sort({ timestamp: 1 }).limit(50));
