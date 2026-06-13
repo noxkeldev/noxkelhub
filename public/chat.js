@@ -131,7 +131,6 @@ async function activateServerWorkspace(srv) {
     switchWorkspaceView('panel-chat-deck');
 }
 
-// Renders channels securely with data bindings
 function renderChannelsList(channels) {
     const container = document.getElementById('sidebar-channels-list');
     if (!container) return;
@@ -139,28 +138,24 @@ function renderChannelsList(channels) {
 
     channels.forEach(ch => {
         const row = document.createElement('div');
-        const chName = ch.name || ch.channelName;
         row.className = "channel-row-item";
-        row.setAttribute('data-ch-id', ch._id);
         row.style.padding = "5px 10px";
         row.style.cursor = "pointer";
         row.style.color = ch._id === currentChannelId ? "#00ff55" : "#aaa";
-        row.innerText = `# ${chName}`;
-        row.onclick = () => selectChannelNode(chName, ch._id);
+        row.innerText = `# ${ch.name || ch.channelName}`;
+        row.onclick = () => selectChannelNode(ch.name || ch.channelName, ch._id);
         container.appendChild(row);
     });
 }
 
-// Loads specific channel logs without layout fragmentation
 async function selectChannelNode(name, id) {
     currentChannelName = name;
     currentChannelId = id;
 
-    // Direct DOM binding queries instead of text scanning string dependencies
     const container = document.getElementById('sidebar-channels-list');
     if (container) {
-        container.querySelectorAll('.channel-row-item').forEach(div => {
-            if(div.getAttribute('data-ch-id') === id) div.style.color = "#00ff55";
+        container.querySelectorAll('div').forEach(div => {
+            if(div.innerText === `# ${name}`) div.style.color = "#00ff55";
             else div.style.color = "#aaa";
         });
     }
@@ -363,10 +358,6 @@ function confirmPhotoPacketTransmission() {
 
 function renderMessageRow(msg) {
     const scroller = document.getElementById('chat-scroller');
-    
-    // Prevent duplicated messages from building up in structural view shifts
-    if(document.getElementById(`msg-block-${msg._id}`)) return;
-
     const row = document.createElement('div');
     row.className = "msg-line";
     row.id = `msg-block-${msg._id}`;
@@ -379,15 +370,15 @@ function renderMessageRow(msg) {
     if(msg.username === currentUsername) {
         actionMenu = `
             <div class="msg-actions-trigger">
-                <button class="msg-action-btn" onclick="triggerEditPacketPrompt('${msg._id}', \`${msg.text.replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`)">EDIT</button>
+                <button class="msg-action-btn" onclick="triggerEditPacketPrompt('${msg._id}', \`${msg.text}\`)">EDIT</button>
                 <button class="msg-action-btn" onclick="triggerDeletePacket('${msg._id}')">DEL</button>
-                <button class="msg-action-btn" onclick="triggerForwardPacket(\`${msg.text.replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`)">FWD</button>
+                <button class="msg-action-btn" onclick="triggerForwardPacket(\`${msg.text}\`)">FWD</button>
             </div>
         `;
     } else {
         actionMenu = `
             <div class="msg-actions-trigger">
-                <button class="msg-action-btn" onclick="triggerForwardPacket(\`${msg.text.replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`)">FWD</button>
+                <button class="msg-action-btn" onclick="triggerForwardPacket(\`${msg.text}\`)">FWD</button>
             </div>
         `;
     }
@@ -419,12 +410,7 @@ function triggerEditPacketPrompt(id, rawText) {
         });
         if(res.ok) {
             closeModal('modal-edit-message');
-            
-            // Dynamic in-memory DOM manipulation replaces global server network refetches
-            const targetedRender = document.getElementById(`text-render-${messageUnderRevisionId}`);
-            if(targetedRender) {
-                targetedRender.innerHTML = `${nText} <span style="font-size:0.6rem; color:#444; margin-left:5px;">(edited)</span>`;
-            }
+            selectChannelNode(currentChannelName, currentChannelId); 
         }
     };
 }
@@ -432,10 +418,7 @@ function triggerEditPacketPrompt(id, rawText) {
 async function triggerDeletePacket(id) {
     if(!confirm("Erase this text packet from stream database?")) return;
     const res = await fetch(`/api/messages/${id}`, { method: 'DELETE' });
-    if(res.ok) {
-        const targetNode = document.getElementById(`msg-block-${id}`);
-        if(targetNode) targetNode.remove();
-    }
+    if(res.ok) document.getElementById(`msg-block-${id}`).remove();
 }
 
 function triggerForwardPacket(text) {
@@ -457,10 +440,10 @@ async function inspectUserProfile(targetName) {
     const data = await res.json();
     
     document.getElementById('prof-modal-username').innerText = `@${data.username}`;
-    document.getElementById('prof-modal-pfp').src = data.pfp || `https://api.dicebear.com/7.x/bottts/svg?seed=${data.username}`;
-    document.getElementById('prof-modal-pronouns').innerText = `Pronouns: ${data.pronouns || "Not specified"}`;
+    document.getElementById('prof-modal-pfp').src = data.pfp;
+    document.getElementById('prof-modal-pronouns').innerText = `Pronouns: ${data.pronouns}`;
     document.getElementById('prof-modal-age').innerText = `Age: ${data.age || "Not tracked"}`;
-    document.getElementById('prof-modal-bio').innerText = data.bio || "No profile bio loaded yet.";
+    document.getElementById('prof-modal-bio').innerText = data.bio;
     
     const actionBar = document.getElementById('prof-modal-interaction-bar');
     actionBar.innerHTML = "";
