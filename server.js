@@ -13,7 +13,7 @@ const io = new Server(server);
 mongoose.connect('mongodb+srv://sweetcafw:BLACKPINK%40LISA@cluster0.oxbhatm.mongodb.net/?appName=Cluster0');
 
 // ==========================================
-// 1. UPDATED SCHEMAS WITH ALL NEW FEATURES
+// 1. SCHEMAS MATRIX (ALIGNED & LOCKED)
 // ==========================================
 const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema({
     username: { type: String, required: true, unique: true },
@@ -21,37 +21,36 @@ const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema(
     pfp: { type: String, default: "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel" },
     servers: { type: Array, default: [] },
     modRecords: { type: Map, of: Object, default: {} },
-    
-    // Settings & Profile Upgrades
     pronouns: { type: String, default: "Not Specified" },
     age: { type: Number, default: null },
     bio: { type: String, default: "No bio written yet." },
-    datingPartner: { type: String, default: "" }, // Stores username of who they are dating
-    
-    // Social Infrastructure
-    friends: { type: Array, default: [] },          // Array of usernames
-    friendRequests: { type: Array, default: [] }    // Array of usernames who sent requests
+    datingPartner: { type: String, default: "" },
+    friends: { type: Array, default: [] },          
+    friendRequests: { type: Array, default: [] }    
 }));
 
 const ChatServer = mongoose.models.ChatServer || mongoose.model('ChatServer', new mongoose.Schema({
     name: { type: String, required: true },
     owner: { type: String, required: true },
-    admins: { type: Array, default: [] }, // Array of usernames with admin clearance
+    admins: { type: Array, default: [] }, 
     isPrivate: { type: Boolean, default: false },
     accessCode: { type: String, default: "" },
     bannedWords: { type: Array, default: [] },
-    channels: [{ name: { type: String, required: true }, isReadOnly: { type: Boolean, default: false } }],
-    
-    // Abadaba State Trackers
+    // Explicitly assigning schema types to arrays to enforce internal subdocument _id persistence
+    channels: [{
+        name: { type: String, required: true },
+        isReadOnly: { type: Boolean, default: false }
+    }],
     abadabaActive: { type: Boolean, default: false },
-    originalNamesBackup: { type: Map, of: String, default: {} } // Maps username to real names if needed
+    originalNamesBackup: { type: Map, of: String, default: {} } 
 }));
 
 const Message = mongoose.models.Message || mongoose.model('Message', new mongoose.Schema({
-    channelId: { type: String, required: true }, // Can be serverId-channelName OR a DM identifier
+    serverId: { type: String, required: true, default: "global" }, // Enforced server isolation block
+    channelId: { type: String, required: true }, 
     username: { type: String, required: true },
     text: { type: String, required: true },
-    imageUrl: { type: String, default: "" },      // Photo sharing link support
+    imageUrl: { type: String, default: "" },      
     isEdited: { type: Boolean, default: false },
     timestamp: { type: Date, default: Date.now }
 }));
@@ -60,20 +59,19 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ==========================================
-// FIX: SESSION ENGINE CONFIGURATION LOCK
+// SESSION ENGINE STORAGE PROTOCOLS
 // ==========================================
 app.use(session({ 
     secret: 'super-secret-key', 
-    resave: true,                // FORCED: Prevents session loss on browser reload
-    saveUninitialized: true,     // FORCED: Instantly locks down connection memory allocation
-    cookie: { maxAge: 24 * 60 * 60 * 1000 } // Session token remains valid for 24 hours
+    resave: true,                
+    saveUninitialized: true,     
+    cookie: { maxAge: 24 * 60 * 60 * 1000 } 
 }));
 
 // ==========================================
-// 2. EXISTING & NEW API TRACKS
+// 2. BACKEND ROUTING API CORE
 // ==========================================
 
-// 🔥 INJECTED FIX: Session persistence validator check route for frontend auto-login
 app.get('/api/auth/check', (req, res) => {
     if (req.session && req.session.user) {
         res.json({ loggedIn: true, username: req.session.user });
@@ -82,38 +80,31 @@ app.get('/api/auth/check', (req, res) => {
     }
 });
 
-// Existing Authentication Matrix + Session Clear Fixes
 app.post('/auth', async (req, res) => {
     const { type, username, password } = req.body;
     if (type === 'signup') {
         try {
             const hashedPassword = await bcrypt.hash(password, 10);
             await User.create({ username, password: hashedPassword });
-            
             req.session.user = username;
-            req.session.save(); // FORCED: Writes session data to server storage instantly before sending response
-            
+            req.session.save(); 
             res.json({ success: true, isNewUser: true });
         } catch (err) { res.json({ success: false, message: "Username taken!" }); }
     } else {
         const user = await User.findOne({ username });
         if (user && await bcrypt.compare(password, user.password)) {
-            
             req.session.user = username;
-            req.session.save(); // FORCED: Writes session data to server storage instantly before sending response
-            
+            req.session.save(); 
             res.json({ success: true, isNewUser: false });
         } else { res.json({ success: false, message: "Invalid credentials" }); }
     }
 });
 
-// LOGOUT CONFIG MATRIX
 app.post('/api/auth/logout', (req, res) => {
     req.session.destroy();
     res.json({ success: true });
 });
 
-// PROFILE & SETTINGS UPDATE MOTOR
 app.post('/api/user/settings', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const { pronouns, age, bio } = req.body;
@@ -124,12 +115,10 @@ app.post('/api/user/settings', async (req, res) => {
     res.json({ success: true });
 });
 
-// GET PROFILE INFO MATRIX (Fixed to include server arrays)
 app.get('/api/user/profile/:username', async (req, res) => {
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json({ error: "User missing" });
     
-    // Automatically craft bio injection if they are dating someone
     let completeBio = user.bio;
     if (user.datingPartner) {
         completeBio += `\n❤️ Dating @${user.datingPartner} ❤️`;
@@ -143,21 +132,18 @@ app.get('/api/user/profile/:username', async (req, res) => {
         bio: completeBio,
         datingPartner: user.datingPartner,
         friends: user.friends || [],
-        friendRequests: user.friendRequests || [], // 🔥 EXPLICIT SYNC: Keeping array keys matching database names
+        friendRequests: user.friendRequests || [], 
         pendingRequests: user.friendRequests || [],
-        servers: user.servers || [] // 🔥 THE FIX: Injects your server IDs back into the data stream!
+        servers: user.servers || [] 
     });
 });
 
-
-// DISCOVER PAGE CORE: Pulls all open public nodes
 app.get('/api/discover/servers', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const publicServers = await ChatServer.find({ isPrivate: false });
     res.json(publicServers);
 });
 
-// DELETING SERVERS AND CHANNELS
 app.delete('/api/servers/:serverId', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const srv = await ChatServer.findById(req.params.serverId);
@@ -178,7 +164,6 @@ app.delete('/api/channels/:serverId/:channelName', async (req, res) => {
     res.json({ success: true });
 });
 
-// WIRED UP ENGINE RECONSTRUCTION: CHANNEL CREATION PIPELINE
 app.post('/api/channels/create', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const { serverId, channelName, isReadOnly } = req.body;
@@ -187,12 +172,10 @@ app.post('/api/channels/create', async (req, res) => {
         const srv = await ChatServer.findById(serverId);
         if (!srv) return res.status(404).json({ success: false, message: "Server not found." });
 
-        // Absolute Owner authorization override verification check
         if (srv.owner !== req.session.user) {
-            return res.status(403).json({ success: false, message: "ACCESS DENIED: Room engineering rejected by mainframe permissions cluster." });
+            return res.status(403).json({ success: false, message: "ACCESS DENIED: Engineering clearance error." });
         }
 
-        // Prevent channel identifier name duplicates within the same server grid
         const channelExists = srv.channels.some(c => c.name === channelName.toLowerCase());
         if (channelExists) return res.status(400).json({ success: false, message: "Target space fingerprint already established." });
 
@@ -206,30 +189,6 @@ app.post('/api/channels/create', async (req, res) => {
     }
 });
 
-// FIX FEATURE: PER-SERVER ROOM DELETION (OWNER ONLY)
-app.post('/api/channels/delete-room', async (req, res) => {
-    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
-    const { serverId, roomName } = req.body;
-
-    try {
-        const srv = await ChatServer.findById(serverId);
-        if (!srv) return res.status(404).json({ success: false, message: "Server not found." });
-        
-        if (srv.owner !== req.session.user) {
-            return res.status(403).json({ success: false, message: "Clearance Error: Only the Server Owner can delete custom rooms!" });
-        }
-
-        await ChatServer.findByIdAndUpdate(serverId, {
-            $pull: { channels: { name: roomName } }
-        });
-
-        res.json({ success: true, message: `Room '${roomName}' successfully cleared.` });
-    } catch (err) {
-        res.status(500).json({ success: false, message: "Internal Engine Error." });
-    }
-});
-
-// MESSAGE MODIFICATION TRACKS (Edit/Delete)
 app.post('/api/messages/edit', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const { messageId, newText } = req.body;
@@ -251,7 +210,6 @@ app.delete('/api/messages/:messageId', async (req, res) => {
     res.json({ success: true });
 });
 
-// SOCIAL GATEWAY CONNECTIONS (Friends & Dating Links)
 app.post('/api/social/friend-request', async (req, res) => {
     const { targetUser } = req.body;
     if (targetUser === req.session.user) return res.json({ success: false, message: "Can't friend yourself." });
@@ -272,10 +230,12 @@ app.post('/api/social/date-request', async (req, res) => {
     res.json({ success: true });
 });
 
-// FIXED FEATURE: DATE SYSTEM ROLLBACK PURGE MATRIX
+// FIXED: Populated structural rollback query path to purge database arrays properly
 app.post('/api/social/cancel-date', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+    const { targetUser } = req.body;
     try {
+        await User.updateOne({ username: targetUser }, { $pull: { friendRequests: req.session.user } });
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, error: "Internal structural rollback error." });
@@ -289,7 +249,6 @@ app.post('/api/social/accept-date', async (req, res) => {
     res.json({ success: true });
 });
 
-// RETAINED LEGACY ROUTERS + PLATFORM OWNER ROOT UPGRADES
 app.post('/api/servers/join-global', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     try {
@@ -337,13 +296,12 @@ app.post('/api/servers/automod', async (req, res) => {
     res.json({ success: true });
 });
 
-// 🔥 INJECTED FIX: Multi-parameter fallback route to support frontend selectChannelNode schema calls
+// FIXED: Isolated data fetch parameter querying to protect server spaces from message bleeding
 app.get('/api/messages/:serverId/:channelId', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
-    res.json(await Message.find({ channelId: req.params.channelId }).sort({ timestamp: 1 }).limit(50));
+    res.json(await Message.find({ serverId: req.params.serverId, channelId: req.params.channelId }).sort({ timestamp: 1 }).limit(50));
 });
 
-// Retained single parameter route for legacy channel configurations
 app.get('/api/messages/:channelId', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     res.json(await Message.find({ channelId: req.params.channelId }).sort({ timestamp: 1 }).limit(50));
@@ -361,10 +319,19 @@ app.get('/api/user/pfp/:username', async (req, res) => {
 });
 
 // ==========================================
-// 3. SOCKETS CONTROLLER (WITH PFPS FIXED)
+// 3. SOCKET TRANSMISSION MOTOR (UPDATED)
 // ==========================================
 io.on('connection', (socket) => {
-    socket.on('join_channel', (channelId) => { socket.join(channelId); });
+    
+    // FIXED: Ensured room string binding is cleanly cast upon context entry switches
+    socket.on('join_channel', (roomUniqueSignature) => { 
+        // Force drop older room matrix allocations before picking up new bounds
+        const currentRooms = Array.from(socket.rooms);
+        currentRooms.forEach(rm => {
+            if (rm !== socket.id) socket.leave(rm);
+        });
+        socket.join(roomUniqueSignature); 
+    });
 
     socket.on('send_chat_message', async (data) => {
         let { serverId, channelId, channelName, username, text, imageUrl } = data;
@@ -391,7 +358,8 @@ io.on('connection', (socket) => {
         const senderInfo = await User.findOne({ username: data.username });
         const activePfp = senderInfo ? senderInfo.pfp : "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel";
 
-        const savedMsg = await Message.create({ channelId, username, text, imageUrl });
+        // Enforced strict serverId logging inside documents
+        const savedMsg = await Message.create({ serverId, channelId, username, text, imageUrl });
         
         io.to(channelId).emit('receive_chat_message', { 
             ...savedMsg._doc, 
