@@ -121,7 +121,9 @@ async function activateServerWorkspace(srv) {
 
     if (srv.channels && srv.channels.length > 0) {
         renderChannelsList(srv.channels);
-        selectChannelNode(srv.channels[0].name || srv.channels[0].channelName, srv.channels[0]._id);
+        // FIX: Prioritizes unique ID allocation routing and provides proper fallback logic matching database layout
+        const targetChannel = srv.channels[0];
+        selectChannelNode(targetChannel.name || targetChannel.channelName, targetChannel._id);
     } else {
         const channelsContainer = document.getElementById('sidebar-channels-list');
         if (channelsContainer) {
@@ -139,6 +141,7 @@ function renderChannelsList(channels) {
     channels.forEach(ch => {
         const row = document.createElement('div');
         row.className = "channel-row-item";
+        row.setAttribute('data-ch-id', ch._id); // FIX: Enforces structural data binding attribute to protect ID parameters
         row.style.padding = "5px 10px";
         row.style.cursor = "pointer";
         row.style.color = ch._id === currentChannelId ? "#00ff55" : "#aaa";
@@ -152,15 +155,19 @@ async function selectChannelNode(name, id) {
     currentChannelName = name;
     currentChannelId = id;
 
+    // FIX: Switched from unstable string match selection to direct node identity data-attribute validation checks
     const container = document.getElementById('sidebar-channels-list');
     if (container) {
-        container.querySelectorAll('div').forEach(div => {
-            if(div.innerText === `# ${name}`) div.style.color = "#00ff55";
+        container.querySelectorAll('.channel-row-item').forEach(div => {
+            if(div.getAttribute('data-ch-id') === id) div.style.color = "#00ff55";
             else div.style.color = "#aaa";
         });
     }
 
     document.getElementById('chat-scroller').innerHTML = "<p style='font-size:0.75rem; color:#444; padding:10px;'>Fetching secure stream parameters...</p>";
+
+    // FIXED: Emits active socket channel update handshake instantly so real-time updates broadcast properly
+    socket.emit('join_channel', id);
 
     try {
         const res = await fetch(`/api/messages/${currentServerId}/${currentChannelId}`);
@@ -291,7 +298,7 @@ function handleSlashCommands(str) {
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                alert(`SYSTEM: Transmission aborted. Date request sent to @${target} has been purged.`);
+                alert(`SYSTEM: Transmission aborted. Invite request sent to @${target} has been purged.`);
             } else {
                 alert("ERROR: Mainframe failed to purge packet.");
             }
@@ -422,11 +429,27 @@ async function triggerDeletePacket(id) {
 }
 
 function triggerForwardPacket(text) {
-    const targetDest = prompt("Enter target room location identifier channel name (e.g., lounge):");
-    if(!targetDest) return;
+    const targetDestName = prompt("Enter target room location identifier channel name (e.g., lounge):");
+    if(!targetDestName) return;
+
+    // FIX: Safely finds target structural configuration bounds instead of trying to merge strings blindly
+    const container = document.getElementById('sidebar-channels-list');
+    let targetedChannelId = currentChannelId; // default fallback context
+    
+    if (container) {
+        const matchingNode = Array.from(container.querySelectorAll('.channel-row-item')).find(div => div.innerText.includes(targetDestName.toLowerCase()));
+        if(matchingNode) {
+            targetedChannelId = matchingNode.getAttribute('data-ch-id');
+        }
+    }
+
     socket.emit('send_chat_message', {
-        serverId: currentServerId, channelId: `${currentServerId}-${targetDest}`,
-        channelName: targetDest, username: currentUsername, text: `[Forwarded]: ${text}`, imageUrl: ""
+        serverId: currentServerId, 
+        channelId: targetedChannelId,
+        channelName: targetDestName, 
+        username: currentUsername, 
+        text: `[Forwarded]: ${text}`, 
+        imageUrl: ""
     });
     alert("Message packet forwarded.");
 }
@@ -448,22 +471,25 @@ async function inspectUserProfile(targetName) {
     const actionBar = document.getElementById('prof-modal-interaction-bar');
     actionBar.innerHTML = "";
     
+    // FIXED: Formatted action payload trigger loops with localized string contexts to prevent variable sync cross-fires
     if(targetName !== currentUsername) {
         actionBar.innerHTML = `
-            <button onclick="dispatchSocialRequest('friend')">you r my friend now?</button>
-            <button onclick="dispatchSocialRequest('date')" style="border-color:#ff0055; color:#ff0055;">DATE?</button>
+            <button onclick="dispatchSocialRequest('friend', '${targetName}')">you r my friend now?</button>
+            <button onclick="dispatchSocialRequest('date', '${targetName}')" style="border-color:#ff0055; color:#ff0055;">INVITE?</button>
         `;
     }
     openModal('modal-view-profile');
 }
 
-async function dispatchSocialRequest(type) {
+async function dispatchSocialRequest(type, preciseTargetUser) {
     closeModal('modal-view-profile');
+    const userToTarget = preciseTargetUser || activeInspectedUser;
+    
     if(type === 'friend') {
         const res = await fetch('/api/social/friend-request', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ targetUser: activeInspectedUser })
+            body: JSON.stringify({ targetUser: userToTarget })
         });
         if(res.ok) alert("Friend synchronization query sent.");
     }
@@ -471,9 +497,9 @@ async function dispatchSocialRequest(type) {
         await fetch('/api/social/date-request', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ targetUser: activeInspectedUser })
+            body: JSON.stringify({ targetUser: userToTarget })
         });
-        alert(`Dating connection request transmitted to @${activeInspectedUser}. Waiting for signature...`);
+        alert(`Connection request transmitted to @${userToTarget}. Waiting for signature...`);
     }
 }
 
@@ -632,13 +658,13 @@ socket.on('mod_action', (data) => {
 
 socket.on('incoming_date_packet', async (data) => {
     if(data.target === currentUsername) {
-        if(confirm(`⚠️ INCOMING DATING REQUEST: @${data.sender} sent a 'DATE?' request packet. Establish heart connection synchronization matrix?`)) {
+        if(confirm(`⚠️ INCOMING INVITE REQUEST: @${data.sender} sent an invitation packet. Establish connection synchronization matrix?`)) {
             await fetch('/api/social/accept-date', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ targetUser: data.sender })
             });
-            alert(`Synchronization successful! You are now dating @${data.sender}. Check out your bio update!`);
+            alert(`Synchronization successful! Connection confirmed with @${data.sender}. Check out your bio update!`);
         }
     }
 });
