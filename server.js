@@ -85,11 +85,34 @@ app.post('/auth', async (req, res) => {
     if (type === 'signup') {
         try {
             const hashedPassword = await bcrypt.hash(password, 10);
-            await User.create({ username, password: hashedPassword });
+            
+            // Create the new user record
+            const newUser = await User.create({ username, password: hashedPassword });
+            
+            // Automatically find or spin up the Global Mainframe Network
+            let globalSrv = await ChatServer.findOne({ name: 'Global Network' });
+            if (!globalSrv) {
+                globalSrv = await ChatServer.create({
+                    name: 'Global Network', 
+                    owner: 'sweetcafw', 
+                    isPrivate: false,
+                    channels: [
+                        { name: 'general', isReadOnly: false }, 
+                        { name: 'announcements', isReadOnly: true }
+                    ]
+                });
+            }
+
+            // Push the Global server ID into the new user's server array
+            newUser.servers.push(globalSrv._id.toString());
+            await newUser.save();
+
             req.session.user = username;
             req.session.save(); 
             res.json({ success: true, isNewUser: true });
-        } catch (err) { res.json({ success: false, message: "Username taken!" }); }
+        } catch (err) { 
+            res.json({ success: false, message: "Username taken!" }); 
+        }
     } else {
         const user = await User.findOne({ username });
         if (user && await bcrypt.compare(password, user.password)) {
@@ -153,7 +176,6 @@ app.delete('/api/servers/:serverId', async (req, res) => {
     res.json({ success: true });
 });
 
-// 🔥 RESTORED FUNCTIONALITY: PER-SERVER ROOM SECTOR TERMINATION ROUTE
 app.delete('/api/channels/:serverId/:channelName', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     
