@@ -995,9 +995,13 @@ let wadminStage1Keys = "";
 let wadminStage2Keys = "";
 let wadminTimeoutTracker = null;
 
-// Listen to every single keystroke across the entire window view
 window.addEventListener('keydown', (event) => {
-    // SECURITY EXIT HATCH: If the panel is open and they tap Escape, instantly lock it down
+    // 1. SAFETY SHIELD: Ignore typing if you are actively focused inside an input box or text area
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+        return;
+    }
+
+    // 2. ESCAPE HATCH: Clear panel if open
     if (event.key === 'Escape') {
         const panel = document.getElementById('wadmin-master-panel');
         if (panel && panel.style.display === 'flex') {
@@ -1010,13 +1014,12 @@ window.addEventListener('keydown', (event) => {
         return;
     }
 
-    // Capture standard single alphanumeric and symbol strings, ignore Shift/Alt commands
-    if (event.key.length !== 1) return;
+    // 3. FIX UNCAUGHT TYPEERROR: Safely verify key property exists and is a single character
+    if (!event.key || event.key.length !== 1) return;
 
     // PHASE 1: Tracking the keyboard symbol matrix link !@#$%^&*()
     if (!isWadminBufferEnabled) {
         wadminStage1Keys += event.key;
-        // Keep the tracker locked to the last 10 characters typed
         if (wadminStage1Keys.length > 10) {
             wadminStage1Keys = wadminStage1Keys.substring(wadminStage1Keys.length - 10);
         }
@@ -1026,7 +1029,6 @@ window.addEventListener('keydown', (event) => {
             wadminStage1Keys = ""; // Flush phase 1
             console.log("🔓 STAGE 1 AUTHENTICATION EXECUTED: Ghost buffer scanner activated. 10s window open.");
             
-            // Open a strict 10 second countdown matrix to type the spell or it locks back up
             clearTimeout(wadminTimeoutTracker);
             wadminTimeoutTracker = setTimeout(() => {
                 isWadminBufferEnabled = false;
@@ -1039,13 +1041,11 @@ window.addEventListener('keydown', (event) => {
     else {
         wadminStage2Keys += event.key.toUpperCase();
         
-        // Keep tracker locked to the exact length of your secret word (14 letters)
         if (wadminStage2Keys.length > 14) {
             wadminStage2Keys = wadminStage2Keys.substring(wadminStage2Keys.length - 14);
         }
 
         if (wadminStage2Keys === "ZANIRIZIBITABA") {
-            // Check if the current connected profile has owner rights before changing display
             if (currentUsername === "sweetcafw") { 
                 clearTimeout(wadminTimeoutTracker);
                 isWadminBufferEnabled = false;
