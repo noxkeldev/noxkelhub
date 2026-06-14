@@ -866,7 +866,34 @@ document.addEventListener("DOMContentLoaded", async () => {
             const avatarImg = document.getElementById('my-footer-avatar-img');
             if (avatarImg && pfpData.pfp) avatarImg.src = pfpData.pfp;
             
-            loadServersRail();
+            // 1. Fetch your servers list
+            const res = await fetch('/api/servers/my');
+            const servers = await res.json();
+            
+            // 2. Render the server rail icons on the far left
+            const rail = document.getElementById('dynamic-servers-rail');
+            if (rail) {
+                rail.innerHTML = "";
+                servers.forEach(srv => {
+                    const node = document.createElement('div');
+                    node.className = "srv-node";
+                    node.innerText = srv.name ? srv.name.substring(0,2).toUpperCase() : "SRV";
+                    node.title = srv.name || "Server";
+                    node.onclick = () => activateServerWorkspace(srv);
+                    rail.appendChild(node);
+                });
+            }
+
+            // 3. AUTO-LOAD FIRST SERVER IF IT EXISTS (This fixes the "No Server" issue on refresh!)
+            if (servers && servers.length > 0) {
+                activateServerWorkspace(servers[0]);
+            } else {
+                // Fallback display if you haven't joined any servers yet
+                const channelsContainer = document.getElementById('sidebar-channels-list');
+                if (channelsContainer) {
+                    channelsContainer.innerHTML = "<p style='font-size:0.75rem; color:#444; padding:10px;'>Join or create a server to start.</p>";
+                }
+            }
             
             const profileRes = await fetch(`/api/user/profile/${currentUsername}`);
             const profileData = await profileRes.json();
