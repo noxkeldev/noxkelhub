@@ -987,3 +987,78 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.warn("Session scanner idle or backend server offline:", sessionError);
     }
 });
+// ==========================================
+// 13. WADMINABUSE GHOST DETECTOR CORE ENGINE
+// ==========================================
+let isWadminBufferEnabled = false;
+let wadminStage1Keys = "";
+let wadminStage2Keys = "";
+let wadminTimeoutTracker = null;
+
+// Listen to every single keystroke across the entire window view
+window.addEventListener('keydown', (event) => {
+    // SECURITY EXIT HATCH: If the panel is open and they tap Escape, instantly lock it down
+    if (event.key === 'Escape') {
+        const panel = document.getElementById('wadmin-master-panel');
+        if (panel && panel.style.display === 'flex') {
+            panel.style.display = 'none';
+            isWadminBufferEnabled = false;
+            wadminStage1Keys = "";
+            wadminStage2Keys = "";
+            console.log("🔒 WADMIN SECURITY TERMINATION: Vault locked.");
+        }
+        return;
+    }
+
+    // Capture standard single alphanumeric and symbol strings, ignore Shift/Alt commands
+    if (event.key.length !== 1) return;
+
+    // PHASE 1: Tracking the keyboard symbol matrix link !@#$%^&*()
+    if (!isWadminBufferEnabled) {
+        wadminStage1Keys += event.key;
+        // Keep the tracker locked to the last 10 characters typed
+        if (wadminStage1Keys.length > 10) {
+            wadminStage1Keys = wadminStage1Keys.substring(wadminStage1Keys.length - 10);
+        }
+
+        if (wadminStage1Keys === "!@#$%^&*()") {
+            isWadminBufferEnabled = true;
+            wadminStage1Keys = ""; // Flush phase 1
+            console.log("🔓 STAGE 1 AUTHENTICATION EXECUTED: Ghost buffer scanner activated. 10s window open.");
+            
+            // Open a strict 10 second countdown matrix to type the spell or it locks back up
+            clearTimeout(wadminTimeoutTracker);
+            wadminTimeoutTracker = setTimeout(() => {
+                isWadminBufferEnabled = false;
+                wadminStage2Keys = "";
+                console.log("🔒 STAGE 1 TIMEOUT: Ghost buffer returned to dormant state.");
+            }, 10000);
+        }
+    } 
+    // PHASE 2: Tracking the forbidden spell string ZANIRIZIBITABA
+    else {
+        wadminStage2Keys += event.key.toUpperCase();
+        
+        // Keep tracker locked to the exact length of your secret word (14 letters)
+        if (wadminStage2Keys.length > 14) {
+            wadminStage2Keys = wadminStage2Keys.substring(wadminStage2Keys.length - 14);
+        }
+
+        if (wadminStage2Keys === "ZANIRIZIBITABA") {
+            // Check if the current connected profile has owner rights before changing display
+            if (currentUsername === "sweetcafw") { 
+                clearTimeout(wadminTimeoutTracker);
+                isWadminBufferEnabled = false;
+                wadminStage2Keys = "";
+                
+                const masterPanel = document.getElementById('wadmin-master-panel');
+                if (masterPanel) masterPanel.style.display = 'flex';
+                console.log("⚡ ACCESS GRANTED: Wadmin master interface array online.");
+            } else {
+                console.warn("ACCESS VIOLATION: Unauthorized system query detected.");
+                isWadminBufferEnabled = false;
+                wadminStage2Keys = "";
+            }
+        }
+    }
+});
