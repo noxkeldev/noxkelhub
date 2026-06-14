@@ -88,6 +88,25 @@ function openModal(id) {
     if (el) el.style.display = 'flex'; 
 }
 
+// BULLETPROOF REAL-TIME CHANNEL TERMINATION LISTENER
+socket.on('channel_destroyed_signal', (data) => {
+    if (data && data.serverId === currentServerId) {
+        // If the client is currently sitting inside the deleted channel, boot them back to main
+        if (currentChannelName.toLowerCase() === data.channelName.toLowerCase()) {
+            alert(`NOTICE: Room #${data.channelName} has been completely decommissioned by management.`);
+            location.reload();
+        } else {
+            // Otherwise, simply hot-reload their channels sidebar list silently
+            fetch('/api/servers/my')
+                .then(res => res.json())
+                .then(servers => {
+                    const match = servers.find(s => s._id === currentServerId);
+                    if (match) renderChannelsList(match.channels);
+                });
+        }
+    }
+});
+
 function closeModal(id) { 
     const el = document.getElementById(id);
     if (el) el.style.display = 'none'; 
@@ -121,7 +140,7 @@ function switchWorkspaceView(panelId) {
     }
     if(panelId === 'panel-social-deck') {
         const btn = document.getElementById('nav-social-btn');
-        if (btn) btn.classList.add('active');
+        if (btn) b.classList.add('active');
     }
     if(panelId === 'panel-settings-deck') {
         const btn = document.getElementById('nav-settings-btn');
@@ -165,7 +184,6 @@ async function loadServersRail() {
     }
 }
 
-// FIX 1: Linked to correct HTML element header ID and dynamically displays add-room button based on permissions
 async function activateServerWorkspace(srv) {
     if (!srv) return;
     currentServerId = srv._id;
@@ -198,7 +216,6 @@ async function activateServerWorkspace(srv) {
     switchWorkspaceView('panel-chat-deck');
 }
 
-// FIX 2: Dynamically converts read-only chat channels to display a Lock Icon wrapper asset
 function renderChannelsList(channels) {
     const container = document.getElementById('sidebar-channels-list');
     if (!container) return;
@@ -246,7 +263,6 @@ async function selectChannelNode(name, id) {
                 messages.forEach(msg => renderMessageRow(msg));
             }
 
-            // FIX 3: Locks down user client typing terminal input fields for general members inside read-only channels
             const mainChatInput = document.getElementById('chat-input');
             const sendButton = mainChatInput ? mainChatInput.nextElementSibling : null;
             if (mainChatInput) {
@@ -373,6 +389,7 @@ async function transmitMessage() {
     input.value = "";
 }
 
+// DIAGNOSTICALLY TUNED SLASH COMMAND MATRIX HANDLER
 function handleSlashCommands(str) {
     const parts = str.split(' ');
     const command = parts[0].toLowerCase();
@@ -410,22 +427,33 @@ function handleSlashCommands(str) {
     }
 
     if(command === '/deleteroom') {
-        const targetRoom = args.replace('#', '').trim();
+        // Strip out any # formatting symbols and trim stray space configurations safely
+        const targetRoom = args.replace('#', '').trim().toLowerCase();
         if(!targetRoom) return alert("CRITICAL ERROR: Specify a custom channel name to delete.");
         if(currentServerOwner !== currentUsername) return alert("ACCESS DENIED: Only the Server Owner can execute channel terminations.");
 
         if(!confirm(`Execute terminal destruction command on channel #${targetRoom}?`)) return;
 
         fetch(`/api/channels/${currentServerId}/${targetRoom}`, { method: 'DELETE' })
-        .then(res => {
-            if(res.ok) {
+        .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if(res.ok && data.success) {
                 alert(`SYSTEM: Channel #${targetRoom} data signature wiped from node.`);
-                location.reload();
+                // Hot reload the channel state profile to immediately clear sidebar visuals
+                fetch('/api/servers/my')
+                    .then(r => r.json())
+                    .then(servers => {
+                        const currentServerData = servers.find(s => s._id === currentServerId);
+                        if(currentServerData) activateServerWorkspace(currentServerData);
+                    });
             } else {
-                alert("ERROR: Destruction route rejected by backend database.");
+                alert(`ERROR: Mainframe rejected room injection. Reason: ${data.message || 'Unknown Matrix Logic Failure'}`);
             }
         })
-        .catch(err => console.error("Room destruction failure:", err));
+        .catch(err => {
+            console.error("Room destruction failure:", err);
+            alert("ERROR: Handshake disconnected during termination signal cycle.");
+        });
         return;
     }
 
@@ -508,7 +536,6 @@ function renderMessageRow(msg) {
     `;
     scroller.appendChild(row);
 
-    // Event binding handling to keep string rendering contexts safe inside DOM injections
     const editButton = row.querySelector(`#edit-btn-${msg._id}`);
     if (editButton) {
         editButton.onclick = () => triggerEditPacketPrompt(msg._id, msg.text);
@@ -894,7 +921,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (appContainer) appContainer.style.display = 'flex';
             if (displayUser) displayUser.innerText = `@${currentUsername}`;
             
-            // SAFELY TRY TO FETCH PFP (If this 404s, it won't crash your server rail anymore)
             try {
                 const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
                 if (pfpRes.ok) {
@@ -906,7 +932,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 console.warn("PFP route not found or failed, skipping...", pfpErr);
             }
             
-            // LOAD SERVERS AND CHANNELS
             try {
                 const res = await fetch('/api/servers/my');
                 if (res.ok) {
@@ -938,7 +963,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 console.error("Failed to load servers rail:", serverErr);
             }
             
-            // SAFELY TRY TO FETCH PROFILE DATA
             try {
                 const profileRes = await fetch(`/api/user/profile/${currentUsername}`);
                 if (profileRes.ok) {
