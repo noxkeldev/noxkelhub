@@ -848,6 +848,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     try {
         const checkRes = await fetch('/api/auth/check');
+        if (!checkRes.ok) return;
         const checkData = await checkRes.json();
         
         if (checkData && checkData.loggedIn) {
@@ -861,51 +862,69 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (appContainer) appContainer.style.display = 'flex';
             if (displayUser) displayUser.innerText = `@${currentUsername}`;
             
-            const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
-            const pfpData = await pfpRes.json();
-            const avatarImg = document.getElementById('my-footer-avatar-img');
-            if (avatarImg && pfpData.pfp) avatarImg.src = pfpData.pfp;
-            
-            // 1. Fetch your servers list
-            const res = await fetch('/api/servers/my');
-            const servers = await res.json();
-            
-            // 2. Render the server rail icons on the far left
-            const rail = document.getElementById('dynamic-servers-rail');
-            if (rail) {
-                rail.innerHTML = "";
-                servers.forEach(srv => {
-                    const node = document.createElement('div');
-                    node.className = "srv-node";
-                    node.innerText = srv.name ? srv.name.substring(0,2).toUpperCase() : "SRV";
-                    node.title = srv.name || "Server";
-                    node.onclick = () => activateServerWorkspace(srv);
-                    rail.appendChild(node);
-                });
-            }
-
-            // 3. AUTO-LOAD FIRST SERVER IF IT EXISTS (This fixes the "No Server" issue on refresh!)
-            if (servers && servers.length > 0) {
-                activateServerWorkspace(servers[0]);
-            } else {
-                // Fallback display if you haven't joined any servers yet
-                const channelsContainer = document.getElementById('sidebar-channels-list');
-                if (channelsContainer) {
-                    channelsContainer.innerHTML = "<p style='font-size:0.75rem; color:#444; padding:10px;'>Join or create a server to start.</p>";
+            // SAFELY TRY TO FETCH PFP (If this 404s, it won't crash your server rail anymore)
+            try {
+                const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
+                if (pfpRes.ok) {
+                    const pfpData = await pfpRes.json();
+                    const avatarImg = document.getElementById('my-footer-avatar-img');
+                    if (avatarImg && pfpData.pfp) avatarImg.src = pfpData.pfp;
                 }
+            } catch (pfpErr) {
+                console.warn("PFP route not found or failed, skipping...", pfpErr);
             }
             
-            const profileRes = await fetch(`/api/user/profile/${currentUsername}`);
-            const profileData = await profileRes.json();
-            if (profileData) {
-                const bioInput = document.getElementById('setting-bio-input');
-                const pronounsInput = document.getElementById('setting-pronouns-input');
-                const ageInput = document.getElementById('setting-age-input');
+            // LOAD SERVERS AND CHANNELS
+            try {
+                const res = await fetch('/api/servers/my');
+                if (res.ok) {
+                    const servers = await res.json();
+                    
+                    const rail = document.getElementById('dynamic-servers-rail');
+                    if (rail) {
+                        rail.innerHTML = "";
+                        servers.forEach(srv => {
+                            const node = document.createElement('div');
+                            node.className = "srv-node";
+                            node.innerText = srv.name ? srv.name.substring(0,2).toUpperCase() : "SRV";
+                            node.title = srv.name || "Server";
+                            node.onclick = () => activateServerWorkspace(srv);
+                            rail.appendChild(node);
+                        });
+                    }
 
-                if (bioInput) bioInput.value = profileData.bio || "";
-                if (pronounsInput) pronounsInput.value = profileData.pronouns || "";
-                if (ageInput && profileData.age) ageInput.value = profileData.age;
+                    if (servers && servers.length > 0) {
+                        activateServerWorkspace(servers[0]);
+                    } else {
+                        const channelsContainer = document.getElementById('sidebar-channels-list');
+                        if (channelsContainer) {
+                            channelsContainer.innerHTML = "<p style='font-size:0.75rem; color:#444; padding:10px;'>Join or create a server to start.</p>";
+                        }
+                    }
+                }
+            } catch (serverErr) {
+                console.error("Failed to load servers rail:", serverErr);
             }
+            
+            // SAFELY TRY TO FETCH PROFILE DATA
+            try {
+                const profileRes = await fetch(`/api/user/profile/${currentUsername}`);
+                if (profileRes.ok) {
+                    const profileData = await profileRes.json();
+                    if (profileData) {
+                        const bioInput = document.getElementById('setting-bio-input');
+                        const pronounsInput = document.getElementById('setting-pronouns-input');
+                        const ageInput = document.getElementById('setting-age-input');
+
+                        if (bioInput) bioInput.value = profileData.bio || "";
+                        if (pronounsInput) pronounsInput.value = profileData.pronouns || "";
+                        if (ageInput && profileData.age) ageInput.value = profileData.age;
+                    }
+                }
+            } catch (profErr) {
+                console.warn("Profile stats fetch failed or route missing, skipping...", profErr);
+            }
+
             console.log("⚡ SESSION RESTORE PROTOCOL: Secure token match. Welcome back.");
         }
     } catch (sessionError) {
