@@ -153,15 +153,25 @@ app.delete('/api/servers/:serverId', async (req, res) => {
     res.json({ success: true });
 });
 
+// 🔥 RESTORED FUNCTIONALITY: PER-SERVER ROOM SECTOR TERMINATION ROUTE
 app.delete('/api/channels/:serverId/:channelName', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
-    const srv = await ChatServer.findById(req.params.serverId);
-    if (!srv || srv.owner !== req.session.user) return res.status(403).json({ error: "Owner clearance only." });
+    
+    try {
+        const srv = await ChatServer.findById(req.params.serverId);
+        if (!srv) return res.status(404).json({ success: false, message: "Target workspace metadata empty." });
+        
+        if (srv.owner !== req.session.user) {
+            return res.status(403).json({ error: "ACCESS DENIED: Engineering clearance error. Owner permissions only." });
+        }
 
-    await ChatServer.findByIdAndUpdate(req.params.serverId, {
-        $pull: { channels: { name: req.params.channelName } }
-    });
-    res.json({ success: true });
+        await ChatServer.findByIdAndUpdate(req.params.serverId, {
+            $pull: { channels: { name: req.params.channelName.toLowerCase() } }
+        });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Internal room cleanup array cycle crash." });
+    }
 });
 
 app.post('/api/channels/create', async (req, res) => {
@@ -230,7 +240,6 @@ app.post('/api/social/date-request', async (req, res) => {
     res.json({ success: true });
 });
 
-// FIXED: Populated structural rollback query path to purge database arrays properly
 app.post('/api/social/cancel-date', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     const { targetUser } = req.body;
@@ -296,7 +305,6 @@ app.post('/api/servers/automod', async (req, res) => {
     res.json({ success: true });
 });
 
-// FIXED: Isolated data fetch parameter querying to protect server spaces from message bleeding
 app.get('/api/messages/:serverId/:channelId', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     res.json(await Message.find({ serverId: req.params.serverId, channelId: req.params.channelId }).sort({ timestamp: 1 }).limit(50));
@@ -323,9 +331,7 @@ app.get('/api/user/pfp/:username', async (req, res) => {
 // ==========================================
 io.on('connection', (socket) => {
     
-    // FIXED: Ensured room string binding is cleanly cast upon context entry switches
     socket.on('join_channel', (roomUniqueSignature) => { 
-        // Force drop older room matrix allocations before picking up new bounds
         const currentRooms = Array.from(socket.rooms);
         currentRooms.forEach(rm => {
             if (rm !== socket.id) socket.leave(rm);
@@ -358,7 +364,6 @@ io.on('connection', (socket) => {
         const senderInfo = await User.findOne({ username: data.username });
         const activePfp = senderInfo ? senderInfo.pfp : "https://api.dicebear.com/7.x/bottts/svg?seed=Noxkel";
 
-        // Enforced strict serverId logging inside documents
         const savedMsg = await Message.create({ serverId, channelId, username, text, imageUrl });
         
         io.to(channelId).emit('receive_chat_message', { 
