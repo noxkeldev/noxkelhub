@@ -36,7 +36,6 @@ const ChatServer = mongoose.models.ChatServer || mongoose.model('ChatServer', ne
     isPrivate: { type: Boolean, default: false },
     accessCode: { type: String, default: "" },
     bannedWords: { type: Array, default: [] },
-    // Explicitly assigning schema types to arrays to enforce internal subdocument _id persistence
     channels: [{
         name: { type: String, required: true },
         isReadOnly: { type: Boolean, default: false }
@@ -46,7 +45,7 @@ const ChatServer = mongoose.models.ChatServer || mongoose.model('ChatServer', ne
 }));
 
 const Message = mongoose.models.Message || mongoose.model('Message', new mongoose.Schema({
-    serverId: { type: String, required: true, default: "global" }, // Enforced server isolation block
+    serverId: { type: String, required: true, default: "global" }, 
     channelId: { type: String, required: true }, 
     username: { type: String, required: true },
     text: { type: String, required: true },
@@ -85,11 +84,8 @@ app.post('/auth', async (req, res) => {
     if (type === 'signup') {
         try {
             const hashedPassword = await bcrypt.hash(password, 10);
-            
-            // Create the new user record
             const newUser = await User.create({ username, password: hashedPassword });
             
-            // Automatically find or spin up the Global Mainframe Network
             let globalSrv = await ChatServer.findOne({ name: 'Global Network' });
             if (!globalSrv) {
                 globalSrv = await ChatServer.create({
@@ -103,7 +99,6 @@ app.post('/auth', async (req, res) => {
                 });
             }
 
-            // Push the Global server ID into the new user's server array
             newUser.servers.push(globalSrv._id.toString());
             await newUser.save();
 
@@ -176,6 +171,7 @@ app.delete('/api/servers/:serverId', async (req, res) => {
     res.json({ success: true });
 });
 
+// BULLETPROOF FIX: Pulls the channel out manually using filter, saves it, and drops a global signal pulse
 app.delete('/api/channels/:serverId/:channelName', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
     
@@ -184,14 +180,30 @@ app.delete('/api/channels/:serverId/:channelName', async (req, res) => {
         if (!srv) return res.status(404).json({ success: false, message: "Target workspace metadata empty." });
         
         if (srv.owner !== req.session.user) {
-            return res.status(403).json({ error: "ACCESS DENIED: Engineering clearance error. Owner permissions only." });
+            return res.status(403).json({ error: "ACCESS DENIED: Owner permissions only." });
         }
 
-        await ChatServer.findByIdAndUpdate(req.params.serverId, {
-            $pull: { channels: { name: req.params.channelName.toLowerCase() } }
+        const targetRoomName = req.params.channelName.trim().toLowerCase();
+
+        // Overwrite channels list by filtering out the designated target
+        const originalLength = srv.channels.length;
+        srv.channels = srv.channels.filter(ch => ch.name.toLowerCase() !== targetRoomName);
+
+        if (srv.channels.length === originalLength) {
+            return res.status(404).json({ success: false, message: "Room signature not found in array." });
+        }
+
+        await srv.save();
+
+        // Broadcast layout cleanup event alert token across websockets
+        io.emit('channel_destroyed_signal', { 
+            serverId: req.params.serverId, 
+            channelName: targetRoomName 
         });
+
         res.json({ success: true });
     } catch (err) {
+        console.error("Deletion route error trace:", err);
         res.status(500).json({ success: false, message: "Internal room cleanup array cycle crash." });
     }
 });
@@ -349,7 +361,7 @@ app.get('/api/user/pfp/:username', async (req, res) => {
 });
 
 // ==========================================
-// 3. SOCKET TRANSMISSION MOTOR (UPDATED)
+// 3. SOCKET TRANSMISSION MOTOR
 // ==========================================
 io.on('connection', (socket) => {
     
