@@ -165,12 +165,25 @@ async function loadServersRail() {
     }
 }
 
+// FIX 1: Linked to correct HTML element header ID and dynamically displays add-room button based on permissions
 async function activateServerWorkspace(srv) {
+    if (!srv) return;
     currentServerId = srv._id;
     currentServerOwner = srv.owner;
     
-    const titleHeader = document.getElementById('active-server-title-header');
-    if (titleHeader) titleHeader.innerText = srv.name;
+    const titleHeader = document.getElementById('active-server-title');
+    if (titleHeader) {
+        titleHeader.innerText = srv.name;
+    }
+
+    const addRoomBtn = document.getElementById('add-room-sidebar-btn');
+    if (addRoomBtn) {
+        if (srv.owner === currentUsername) {
+            addRoomBtn.style.display = 'inline-block';
+        } else {
+            addRoomBtn.style.display = 'none';
+        }
+    }
 
     if (srv.channels && srv.channels.length > 0) {
         renderChannelsList(srv.channels);
@@ -185,6 +198,7 @@ async function activateServerWorkspace(srv) {
     switchWorkspaceView('panel-chat-deck');
 }
 
+// FIX 2: Dynamically converts read-only chat channels to display a Lock Icon wrapper asset
 function renderChannelsList(channels) {
     const container = document.getElementById('sidebar-channels-list');
     if (!container) return;
@@ -197,7 +211,10 @@ function renderChannelsList(channels) {
         row.style.padding = "5px 10px";
         row.style.cursor = "pointer";
         row.style.color = ch._id === currentChannelId ? "#00ff55" : "#aaa";
-        row.innerText = `# ${ch.name || ch.channelName}`;
+        
+        let prefixSymbol = ch.isReadOnly ? "🔒 " : "# ";
+        row.innerText = `${prefixSymbol}${ch.name || ch.channelName}`;
+        
         row.onclick = () => selectChannelNode(ch.name || ch.channelName, ch._id);
         container.appendChild(row);
     });
@@ -227,6 +244,21 @@ async function selectChannelNode(name, id) {
             if (scroller) {
                 scroller.innerHTML = "";
                 messages.forEach(msg => renderMessageRow(msg));
+            }
+
+            // FIX 3: Locks down user client typing terminal input fields for general members inside read-only channels
+            const mainChatInput = document.getElementById('chat-input');
+            const sendButton = mainChatInput ? mainChatInput.nextElementSibling : null;
+            if (mainChatInput) {
+                if ((name.toLowerCase() === 'announcements' || name.toLowerCase() === 'announcement') && currentUsername !== currentServerOwner) {
+                    mainChatInput.placeholder = "🔒 This sector is read-only.";
+                    mainChatInput.disabled = true;
+                    if (sendButton) sendButton.disabled = true;
+                } else {
+                    mainChatInput.placeholder = "Broadcast string packet...";
+                    mainChatInput.disabled = false;
+                    if (sendButton) sendButton.disabled = false;
+                }
             }
         }
     } catch(err) {
