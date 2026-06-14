@@ -15,59 +15,90 @@ let messageUnderRevisionId = "";
 // ==========================================
 function toggleAuthMode() {
     isSignUpMode = !isSignUpMode;
-    document.getElementById('auth-title').innerText = isSignUpMode ? "MATRIX REGISTRATION" : "NOXKEL HUB";
-    document.getElementById('toggle-auth').innerText = isSignUpMode ? "Already verified? Connect" : "Need an account? Sign Up";
+    const title = document.getElementById('auth-title');
+    const toggleBtn = document.getElementById('toggle-auth');
+    if (title) title.innerText = isSignUpMode ? "MATRIX REGISTRATION" : "NOXKEL HUB";
+    if (toggleBtn) toggleBtn.innerText = isSignUpMode ? "Already verified? Connect" : "Need an account? Sign Up";
 }
 
 async function handleAuth() {
-    const usernameInput = document.getElementById('username').value.trim();
-    const passwordInput = document.getElementById('password').value;
+    const usernameInputEl = document.getElementById('username');
+    const passwordInputEl = document.getElementById('password');
+    if (!usernameInputEl || !passwordInputEl) return;
+
+    const usernameInput = usernameInputEl.value.trim();
+    const passwordInput = passwordInputEl.value;
     if(!usernameInput || !passwordInput) return alert("Credentials required.");
 
-    const res = await fetch('/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: isSignUpMode ? 'signup' : 'login', username: usernameInput, password: passwordInput })
-    });
-    const data = await res.json();
-    if(data.success) {
-        currentUsername = usernameInput;
-        document.getElementById('auth-container').style.display = 'none';
-        document.getElementById('app-container').style.display = 'flex';
-        document.getElementById('my-display-username').innerText = `@${currentUsername}`;
+    try {
+        const res = await fetch('/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: isSignUpMode ? 'signup' : 'login', username: usernameInput, password: passwordInput })
+        });
+        const data = await res.json();
         
-        // Sync default profile picture asset lookups
-        const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
-        const pfpData = await pfpRes.json();
-        document.getElementById('my-footer-avatar-img').src = pfpData.pfp;
+        if(data.success) {
+            currentUsername = usernameInput;
+            const authContainer = document.getElementById('auth-container');
+            const appContainer = document.getElementById('app-container');
+            const displayUser = document.getElementById('my-display-username');
+            
+            if (authContainer) authContainer.style.display = 'none';
+            if (appContainer) appContainer.style.display = 'flex';
+            if (displayUser) displayUser.innerText = `@${currentUsername}`;
+            
+            // Sync default profile picture asset lookups
+            const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
+            const pfpData = await pfpRes.json();
+            const avatarImg = document.getElementById('my-footer-avatar-img');
+            if (avatarImg && pfpData.pfp) avatarImg.src = pfpData.pfp;
 
-        if(data.isNewUser) {
-            openModal('modal-global-invite');
+            if(data.isNewUser) {
+                openModal('modal-global-invite');
+            } else {
+                loadServersRail();
+            }
         } else {
-            loadServersRail();
+            alert(data.message);
         }
-    } else {
-        alert(data.message);
+    } catch (err) {
+        console.error("Authentication handling failure:", err);
     }
 }
 
 async function executeSystemTermLogout() {
-    const res = await fetch('/api/auth/logout', { method: 'POST' });
-    if(res.ok) {
-        localStorage.clear();
-        sessionStorage.clear();
-        location.reload();
+    try {
+        const res = await fetch('/api/auth/logout', { method: 'POST' });
+        if(res.ok) {
+            localStorage.clear();
+            sessionStorage.clear();
+            location.reload();
+        }
+    } catch (err) {
+        console.error("Logout processing failure:", err);
     }
 }
 
 // ==========================================
 // 2. MODAL CORE ENGINE FUNCTIONS
 // ==========================================
-function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function openModal(id) { 
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'flex'; 
+}
+
+function closeModal(id) { 
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none'; 
+}
+
 function toggleCodeFieldDisplay() {
-    const privacy = document.getElementById('new-server-privacy-input').value;
-    document.getElementById('private-code-field-wrapper').style.display = (privacy === 'private') ? 'block' : 'none';
+    const privacyEl = document.getElementById('new-server-privacy-input');
+    const wrapperEl = document.getElementById('private-code-field-wrapper');
+    if (privacyEl && wrapperEl) {
+        wrapperEl.style.display = (privacyEl.value === 'private') ? 'block' : 'none';
+    }
 }
 
 // ==========================================
@@ -77,39 +108,61 @@ function switchWorkspaceView(panelId) {
     document.querySelectorAll('.workspace-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.sys-btn').forEach(b => b.classList.remove('active'));
     
-    document.getElementById(panelId).classList.add('active');
+    const activePanel = document.getElementById(panelId);
+    if (activePanel) activePanel.classList.add('active');
     
-    if(panelId === 'panel-chat-deck') document.getElementById('nav-chat-btn').classList.add('active');
-    if(panelId === 'panel-discover-deck') document.getElementById('nav-discover-btn').classList.add('active');
-    if(panelId === 'panel-social-deck') document.getElementById('nav-social-btn').classList.add('active');
-    if(panelId === 'panel-settings-deck') document.getElementById('nav-settings-btn').classList.add('active');
+    if(panelId === 'panel-chat-deck') {
+        const btn = document.getElementById('nav-chat-btn');
+        if (btn) btn.classList.add('active');
+    }
+    if(panelId === 'panel-discover-deck') {
+        const btn = document.getElementById('nav-discover-btn');
+        if (btn) btn.classList.add('active');
+    }
+    if(panelId === 'panel-social-deck') {
+        const btn = document.getElementById('nav-social-btn');
+        if (btn) btn.classList.add('active');
+    }
+    if(panelId === 'panel-settings-deck') {
+        const btn = document.getElementById('nav-settings-btn');
+        if (btn) btn.classList.add('active');
+    }
 }
 
 // ==========================================
 // 4. CHAT SERVERS RAIL GENERATION ENGINE
 // ==========================================
 async function acceptGlobalInvite() {
-    const res = await fetch('/api/servers/join-global', { method: 'POST' });
-    if(res.ok) {
-        closeModal('modal-global-invite');
-        loadServersRail();
+    try {
+        const res = await fetch('/api/servers/join-global', { method: 'POST' });
+        if(res.ok) {
+            closeModal('modal-global-invite');
+            loadServersRail();
+        }
+    } catch (err) {
+        console.error("Global invite acceptance failure:", err);
     }
 }
 
 async function loadServersRail() {
-    const res = await fetch('/api/servers/my');
-    const servers = await res.json();
-    const rail = document.getElementById('dynamic-servers-rail');
-    rail.innerHTML = "";
-    
-    servers.forEach(srv => {
-        const node = document.createElement('div');
-        node.className = "srv-node";
-        node.innerText = srv.name.substring(0,2).toUpperCase();
-        node.title = srv.name;
-        node.onclick = () => activateServerWorkspace(srv);
-        rail.appendChild(node);
-    });
+    try {
+        const res = await fetch('/api/servers/my');
+        const servers = await res.json();
+        const rail = document.getElementById('dynamic-servers-rail');
+        if (!rail) return;
+        rail.innerHTML = "";
+        
+        servers.forEach(srv => {
+            const node = document.createElement('div');
+            node.className = "srv-node";
+            node.innerText = srv.name ? srv.name.substring(0,2).toUpperCase() : "SRV";
+            node.title = srv.name || "Server";
+            node.onclick = () => activateServerWorkspace(srv);
+            rail.appendChild(node);
+        });
+    } catch (err) {
+        console.error("Failed loading backend servers rail:", err);
+    }
 }
 
 async function activateServerWorkspace(srv) {
@@ -121,7 +174,6 @@ async function activateServerWorkspace(srv) {
 
     if (srv.channels && srv.channels.length > 0) {
         renderChannelsList(srv.channels);
-        // FIX: Prioritizes unique ID allocation routing and provides proper fallback logic matching database layout
         const targetChannel = srv.channels[0];
         selectChannelNode(targetChannel.name || targetChannel.channelName, targetChannel._id);
     } else {
@@ -141,7 +193,7 @@ function renderChannelsList(channels) {
     channels.forEach(ch => {
         const row = document.createElement('div');
         row.className = "channel-row-item";
-        row.setAttribute('data-ch-id', ch._id); // FIX: Enforces structural data binding attribute to protect ID parameters
+        row.setAttribute('data-ch-id', ch._id); 
         row.style.padding = "5px 10px";
         row.style.cursor = "pointer";
         row.style.color = ch._id === currentChannelId ? "#00ff55" : "#aaa";
@@ -155,7 +207,6 @@ async function selectChannelNode(name, id) {
     currentChannelName = name;
     currentChannelId = id;
 
-    // FIX: Switched from unstable string match selection to direct node identity data-attribute validation checks
     const container = document.getElementById('sidebar-channels-list');
     if (container) {
         container.querySelectorAll('.channel-row-item').forEach(div => {
@@ -164,17 +215,19 @@ async function selectChannelNode(name, id) {
         });
     }
 
-    document.getElementById('chat-scroller').innerHTML = "<p style='font-size:0.75rem; color:#444; padding:10px;'>Fetching secure stream parameters...</p>";
+    const scroller = document.getElementById('chat-scroller');
+    if (scroller) scroller.innerHTML = "<p style='font-size:0.75rem; color:#444; padding:10px;'>Fetching secure stream parameters...</p>";
 
-    // FIXED: Emits active socket channel update handshake instantly so real-time updates broadcast properly
     socket.emit('join_channel', id);
 
     try {
         const res = await fetch(`/api/messages/${currentServerId}/${currentChannelId}`);
         if(res.ok) {
             const messages = await res.json();
-            document.getElementById('chat-scroller').innerHTML = "";
-            messages.forEach(msg => renderMessageRow(msg));
+            if (scroller) {
+                scroller.innerHTML = "";
+                messages.forEach(msg => renderMessageRow(msg));
+            }
         }
     } catch(err) {
         console.error("Failed to load channel history packet:", err);
@@ -182,26 +235,37 @@ async function selectChannelNode(name, id) {
 }
 
 async function confirmCreateServer() {
-    const name = document.getElementById('new-server-name-input').value.trim();
-    const privacy = document.getElementById('new-server-privacy-input').value;
-    const code = document.getElementById('new-server-code-input').value.trim();
+    const nameEl = document.getElementById('new-server-name-input');
+    const privacyEl = document.getElementById('new-server-privacy-input');
+    const codeEl = document.getElementById('new-server-code-input');
+    if (!nameEl || !privacyEl || !codeEl) return;
+
+    const name = nameEl.value.trim();
+    const privacy = privacyEl.value;
+    const code = codeEl.value.trim();
     if(!name) return;
 
-    const res = await fetch('/api/servers/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, isPrivate: (privacy === 'private'), accessCode: code })
-    });
-    if(res.ok) {
-        closeModal('modal-create-server');
-        document.getElementById('new-server-name-input').value = "";
-        document.getElementById('new-server-code-input').value = "";
-        loadServersRail();
+    try {
+        const res = await fetch('/api/servers/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, isPrivate: (privacy === 'private'), accessCode: code })
+        });
+        if(res.ok) {
+            closeModal('modal-create-server');
+            nameEl.value = "";
+            codeEl.value = "";
+            loadServersRail();
+        }
+    } catch (err) {
+        console.error("Server creation protocol error:", err);
     }
 }
 
 async function confirmJoinByCode() {
-    const code = document.getElementById('join-code-input').value.trim();
+    const codeEl = document.getElementById('join-code-input');
+    if (!codeEl) return;
+    const code = codeEl.value.trim();
     if(!code) return;
     alert("Synthesizing entry string...");
     closeModal('modal-join-code');
@@ -211,8 +275,12 @@ async function confirmJoinByCode() {
 // 5. WORKSPACE CONTEXT SWITCHING (CHANNELS)
 // ==========================================
 async function confirmAddRoomChannel() {
-    const name = document.getElementById('new-room-name-input').value.trim().toLowerCase();
-    const type = document.getElementById('new-room-type-input').value; 
+    const nameEl = document.getElementById('new-room-name-input');
+    const typeEl = document.getElementById('new-room-type-input');
+    if (!nameEl || !typeEl) return;
+
+    const name = nameEl.value.trim().toLowerCase();
+    const type = typeEl.value; 
     if(!name) return alert("CRITICAL ERROR: Room name identifier cannot be blank.");
 
     try {
@@ -229,7 +297,7 @@ async function confirmAddRoomChannel() {
         if(res.ok) {
             alert(`SYSTEM: Custom room sector #${name} successfully injected into database.`);
             closeModal('modal-add-room');
-            document.getElementById('new-room-name-input').value = ""; 
+            nameEl.value = ""; 
             
             const refreshRes = await fetch('/api/servers/my');
             const servers = await refreshRes.json();
@@ -252,6 +320,7 @@ async function confirmAddRoomChannel() {
 // ==========================================
 async function transmitMessage() {
     const input = document.getElementById('chat-input');
+    if (!input) return;
     const val = input.value.trim();
     if(!val) return;
 
@@ -282,7 +351,8 @@ function handleSlashCommands(str) {
         return;
     }
     if(command === '/clear') {
-        document.getElementById('chat-scroller').innerHTML = "";
+        const scroller = document.getElementById('chat-scroller');
+        if (scroller) scroller.innerHTML = "";
         return;
     }
 
@@ -295,7 +365,7 @@ function handleSlashCommands(str) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: currentUsername, targetUser: target })
         })
-        .then(res => res.json())
+        .then(res => res.json().catch(() => ({ success: false })))
         .then(data => {
             if(data.success) {
                 alert(`SYSTEM: Transmission aborted. Invite request sent to @${target} has been purged.`);
@@ -339,16 +409,20 @@ function handleSlashCommands(str) {
 }
 
 function dispatchManualAdminCommand(commandType) {
-    const target = document.getElementById('admin-manual-target-user').value.trim();
+    const targetEl = document.getElementById('admin-manual-target-user');
+    if (!targetEl) return;
+    const target = targetEl.value.trim();
     if(!target && ['/kick', '/giveadmin'].includes(commandType)) return alert("Target handle required.");
     
     handleSlashCommands(`${commandType} ${target}`);
     closeModal('modal-admin-terminal-dashboard');
-    document.getElementById('admin-manual-target-user').value = "";
+    targetEl.value = "";
 }
 
 function confirmPhotoPacketTransmission() {
-    const url = document.getElementById('photo-packet-url-input').value.trim();
+    const urlEl = document.getElementById('photo-packet-url-input');
+    if (!urlEl) return;
+    const url = urlEl.value.trim();
     if(!url) return;
 
     socket.emit('send_chat_message', {
@@ -360,11 +434,12 @@ function confirmPhotoPacketTransmission() {
         imageUrl: url
     });
     closeModal('modal-send-photo');
-    document.getElementById('photo-packet-url-input').value = "";
+    urlEl.value = "";
 }
 
 function renderMessageRow(msg) {
     const scroller = document.getElementById('chat-scroller');
+    if (!scroller) return;
     const row = document.createElement('div');
     row.className = "msg-line";
     row.id = `msg-block-${msg._id}`;
@@ -377,15 +452,15 @@ function renderMessageRow(msg) {
     if(msg.username === currentUsername) {
         actionMenu = `
             <div class="msg-actions-trigger">
-                <button class="msg-action-btn" onclick="triggerEditPacketPrompt('${msg._id}', \`${msg.text}\`)">EDIT</button>
+                <button class="msg-action-btn" id="edit-btn-${msg._id}">EDIT</button>
                 <button class="msg-action-btn" onclick="triggerDeletePacket('${msg._id}')">DEL</button>
-                <button class="msg-action-btn" onclick="triggerForwardPacket(\`${msg.text}\`)">FWD</button>
+                <button class="msg-action-btn" id="fwd-btn-${msg._id}">FWD</button>
             </div>
         `;
     } else {
         actionMenu = `
             <div class="msg-actions-trigger">
-                <button class="msg-action-btn" onclick="triggerForwardPacket(\`${msg.text}\`)">FWD</button>
+                <button class="msg-action-btn" id="fwd-btn-${msg._id}">FWD</button>
             </div>
         `;
     }
@@ -400,41 +475,66 @@ function renderMessageRow(msg) {
         ${actionMenu}
     `;
     scroller.appendChild(row);
+
+    // Event binding handling to keep string rendering contexts safe inside DOM injections
+    const editButton = row.querySelector(`#edit-btn-${msg._id}`);
+    if (editButton) {
+        editButton.onclick = () => triggerEditPacketPrompt(msg._id, msg.text);
+    }
+    const fwdButton = row.querySelector(`#fwd-btn-${msg._id}`);
+    if (fwdButton) {
+        fwdButton.onclick = () => triggerForwardPacket(msg.text);
+    }
+
     scroller.scrollTop = scroller.scrollHeight;
 }
 
 function triggerEditPacketPrompt(id, rawText) {
     messageUnderRevisionId = id;
-    document.getElementById('edit-message-text-input').value = rawText;
+    const textInput = document.getElementById('edit-message-text-input');
+    if (textInput) textInput.value = rawText;
     openModal('modal-edit-message');
     
-    document.getElementById('confirm-edit-msg-btn').onclick = async function() {
-        const nText = document.getElementById('edit-message-text-input').value.trim();
-        const res = await fetch('/api/messages/edit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messageId: messageUnderRevisionId, newText: nText })
-        });
-        if(res.ok) {
-            closeModal('modal-edit-message');
-            selectChannelNode(currentChannelName, currentChannelId); 
-        }
-    };
+    const confirmBtn = document.getElementById('confirm-edit-msg-btn');
+    if (confirmBtn) {
+        confirmBtn.onclick = async function() {
+            const nText = textInput ? textInput.value.trim() : "";
+            try {
+                const res = await fetch('/api/messages/edit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messageId: messageUnderRevisionId, newText: nText })
+                });
+                if(res.ok) {
+                    closeModal('modal-edit-message');
+                    selectChannelNode(currentChannelName, currentChannelId); 
+                }
+            } catch (err) {
+                console.error("Message adjustment handshake dropped:", err);
+            }
+        };
+    }
 }
 
 async function triggerDeletePacket(id) {
     if(!confirm("Erase this text packet from stream database?")) return;
-    const res = await fetch(`/api/messages/${id}`, { method: 'DELETE' });
-    if(res.ok) document.getElementById(`msg-block-${id}`).remove();
+    try {
+        const res = await fetch(`/api/messages/${id}`, { method: 'DELETE' });
+        if(res.ok) {
+            const block = document.getElementById(`msg-block-${id}`);
+            if (block) block.remove();
+        }
+    } catch (err) {
+        console.error("Database deletion route blocked:", err);
+    }
 }
 
 function triggerForwardPacket(text) {
     const targetDestName = prompt("Enter target room location identifier channel name (e.g., lounge):");
     if(!targetDestName) return;
 
-    // FIX: Safely finds target structural configuration bounds instead of trying to merge strings blindly
     const container = document.getElementById('sidebar-channels-list');
-    let targetedChannelId = currentChannelId; // default fallback context
+    let targetedChannelId = currentChannelId; 
     
     if (container) {
         const matchingNode = Array.from(container.querySelectorAll('.channel-row-item')).find(div => div.innerText.includes(targetDestName.toLowerCase()));
@@ -459,47 +559,69 @@ function triggerForwardPacket(text) {
 // ==========================================
 async function inspectUserProfile(targetName) {
     activeInspectedUser = targetName;
-    const res = await fetch(`/api/user/profile/${targetName}`);
-    const data = await res.json();
-    
-    document.getElementById('prof-modal-username').innerText = `@${data.username}`;
-    document.getElementById('prof-modal-pfp').src = data.pfp;
-    document.getElementById('prof-modal-pronouns').innerText = `Pronouns: ${data.pronouns}`;
-    document.getElementById('prof-modal-age').innerText = `Age: ${data.age || "Not tracked"}`;
-    document.getElementById('prof-modal-bio').innerText = data.bio;
-    
-    const actionBar = document.getElementById('prof-modal-interaction-bar');
-    actionBar.innerHTML = "";
-    
-    // FIXED: Formatted action payload trigger loops with localized string contexts to prevent variable sync cross-fires
-    if(targetName !== currentUsername) {
-        actionBar.innerHTML = `
-            <button onclick="dispatchSocialRequest('friend', '${targetName}')">you r my friend now?</button>
-            <button onclick="dispatchSocialRequest('date', '${targetName}')" style="border-color:#ff0055; color:#ff0055;">INVITE?</button>
-        `;
+    try {
+        const res = await fetch(`/api/user/profile/${targetName}`);
+        const data = await res.json();
+        
+        const usernameEl = document.getElementById('prof-modal-username');
+        const pfpEl = document.getElementById('prof-modal-pfp');
+        const pronounsEl = document.getElementById('prof-modal-pronouns');
+        const ageEl = document.getElementById('prof-modal-age');
+        const bioEl = document.getElementById('prof-modal-bio');
+
+        if (usernameEl) usernameEl.innerText = `@${data.username}`;
+        if (pfpEl && data.pfp) pfpEl.src = data.pfp;
+        if (pronounsEl) pronounsEl.innerText = `Pronouns: ${data.pronouns || "Unspecified"}`;
+        if (ageEl) ageEl.innerText = `Age: ${data.age || "Not tracked"}`;
+        if (bioEl) bioEl.innerText = data.bio || "";
+        
+        const actionBar = document.getElementById('prof-modal-interaction-bar');
+        if (actionBar) {
+            actionBar.innerHTML = "";
+            if(targetName !== currentUsername) {
+                const friendBtn = document.createElement('button');
+                friendBtn.innerText = "you r my friend now?";
+                friendBtn.onclick = () => dispatchSocialRequest('friend', targetName);
+
+                const dateBtn = document.createElement('button');
+                dateBtn.innerText = "INVITE?";
+                dateBtn.style.borderColor = "#ff0055";
+                dateBtn.style.color = "#ff0055";
+                dateBtn.onclick = () => dispatchSocialRequest('date', targetName);
+
+                actionBar.appendChild(friendBtn);
+                actionBar.appendChild(dateBtn);
+            }
+        }
+        openModal('modal-view-profile');
+    } catch (err) {
+        console.error("Profile inspection system exception:", err);
     }
-    openModal('modal-view-profile');
 }
 
 async function dispatchSocialRequest(type, preciseTargetUser) {
     closeModal('modal-view-profile');
     const userToTarget = preciseTargetUser || activeInspectedUser;
     
-    if(type === 'friend') {
-        const res = await fetch('/api/social/friend-request', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ targetUser: userToTarget })
-        });
-        if(res.ok) alert("Friend synchronization query sent.");
-    }
-    if(type === 'date') {
-        await fetch('/api/social/date-request', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ targetUser: userToTarget })
-        });
-        alert(`Connection request transmitted to @${userToTarget}. Waiting for signature...`);
+    try {
+        if(type === 'friend') {
+            const res = await fetch('/api/social/friend-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUser: userToTarget })
+            });
+            if(res.ok) alert("Friend synchronization query sent.");
+        }
+        if(type === 'date') {
+            await fetch('/api/social/date-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUser: userToTarget })
+            });
+            alert(`Connection request transmitted to @${userToTarget}. Waiting for signature...`);
+        }
+    } catch (err) {
+        console.error("Social pipeline negotiation error:", err);
     }
 }
 
@@ -508,27 +630,35 @@ async function dispatchSocialRequest(type, preciseTargetUser) {
 // ==========================================
 async function loadDiscoverMainframe() {
     switchWorkspaceView('panel-discover-deck');
-    const res = await fetch('/api/discover/servers');
-    const openServers = await res.json();
-    const grid = document.getElementById('discover-servers-grid');
-    grid.innerHTML = "";
+    try {
+        const res = await fetch('/api/discover/servers');
+        const openServers = await res.json();
+        const grid = document.getElementById('discover-servers-grid');
+        if (!grid) return;
+        grid.innerHTML = "";
 
-    openServers.forEach(srv => {
-        const card = document.createElement('div');
-        card.className = "matrix-card";
-        card.innerHTML = `
-            <div>
-                <h4>${srv.name}</h4>
-                <p>Host Controller: @${srv.owner}</p>
-            </div>
-            <button class="sys-btn" style="text-align:center;" id="disc-join-${srv._id}">Establish Connection Sync</button>
-        `;
-        grid.appendChild(card);
-        
-        card.querySelector(`#disc-join-${srv._id}`).onclick = () => {
-            activateServerWorkspace(srv);
-        };
-    });
+        openServers.forEach(srv => {
+            const card = document.createElement('div');
+            card.className = "matrix-card";
+            card.innerHTML = `
+                <div>
+                    <h4>${srv.name || 'Unnamed Server'}</h4>
+                    <p>Host Controller: @${srv.owner || 'Unknown'}</p>
+                </div>
+                <button class="sys-btn" style="text-align:center;" id="disc-join-${srv._id}">Establish Connection Sync</button>
+            `;
+            grid.appendChild(card);
+            
+            const connBtn = card.querySelector(`#disc-join-${srv._id}`);
+            if (connBtn) {
+                connBtn.onclick = () => {
+                    activateServerWorkspace(srv);
+                };
+            }
+        });
+    } catch (err) {
+        console.error("Discover sector framework synchronization trace dropped:", err);
+    }
 }
 
 // ==========================================
@@ -540,72 +670,85 @@ async function loadSocialMainframe() {
     const reqBox = document.getElementById('social-requests-box');
     const friendBox = document.getElementById('social-friends-box');
     
-    reqBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>Scanning request logs...</p>";
-    friendBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>Scanning active pipelines...</p>";
+    if (reqBox) reqBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>Scanning request logs...</p>";
+    if (friendBox) friendBox.innerHTML = "<p style='font-size:0.75rem; color:#444;'>Scanning active pipelines...</p>";
 
     try {
         const res = await fetch(`/api/user/profile/${currentUsername}`);
         const data = await res.json();
 
-        reqBox.innerHTML = "";
-        const pendingRequests = data.friendRequests || data.pendingRequests || []; 
-        
-        if (pendingRequests.length === 0) {
-            reqBox.innerHTML = "<p style='font-size:0.75rem; color:#666;'>No pending synchronization queries.</p>";
-        } else {
-            pendingRequests.forEach(sender => {
-                const row = document.createElement('div');
-                row.className = "matrix-card";
-                row.style.display = "flex";
-                row.style.justifyContent = "space-between";
-                row.style.alignItems = "center";
-                row.style.margin = "5px 0";
-                row.style.padding = "8px";
-                row.style.background = "#111";
-                row.style.border = "1px solid #333";
+        if (reqBox) {
+            reqBox.innerHTML = "";
+            const pendingRequests = data.friendRequests || data.pendingRequests || []; 
+            
+            if (pendingRequests.length === 0) {
+                reqBox.innerHTML = "<p style='font-size:0.75rem; color:#666;'>No pending synchronization queries.</p>";
+            } else {
+                pendingRequests.forEach(sender => {
+                    const row = document.createElement('div');
+                    row.className = "matrix-card";
+                    row.style.display = "flex";
+                    row.style.justifyContent = "space-between";
+                    row.style.alignItems = "center";
+                    row.style.margin = "5px 0";
+                    row.style.padding = "8px";
+                    row.style.background = "#111";
+                    row.style.border = "1px solid #333";
 
-                row.innerHTML = `
-                    <span style="font-size:0.85rem; color:#fff;">Incoming: @${sender}</span>
-                    <button class="sys-btn" style="padding:2px 8px; font-size:0.75rem;" onclick="acceptFriendPipeline('${sender}')">ACCEPT</button>
-                `;
-                reqBox.appendChild(row);
-            });
+                    row.innerHTML = `
+                        <span style="font-size:0.85rem; color:#fff;">Incoming: @${sender}</span>
+                        <button class="sys-btn" style="padding:2px 8px; font-size:0.75rem;" id="accept-friend-${sender}">ACCEPT</button>
+                    `;
+                    reqBox.appendChild(row);
+                    
+                    const acceptBtn = row.querySelector(`#accept-friend-${sender}`);
+                    if (acceptBtn) {
+                        acceptBtn.onclick = () => acceptFriendPipeline(sender);
+                    }
+                });
+            }
         }
 
-        friendBox.innerHTML = "";
-        const friendsList = data.friends || [];
-        
-        if (friendsList.length === 0) {
-            friendBox.innerHTML = "<p style='font-size:0.75rem; color:#666;'>No direct active pipelines established.</p>";
-        } else {
-            friendsList.forEach(friend => {
-                const div = document.createElement('div');
-                div.style.padding = "5px 0";
-                div.style.color = "#00ff55"; 
-                div.style.fontSize = "0.85rem";
-                div.innerText = `• @${friend} [SECURE CONNECTION]`;
-                friendBox.appendChild(div);
-            });
+        if (friendBox) {
+            friendBox.innerHTML = "";
+            const friendsList = data.friends || [];
+            
+            if (friendsList.length === 0) {
+                friendBox.innerHTML = "<p style='font-size:0.75rem; color:#666;'>No direct active pipelines established.</p>";
+            } else {
+                friendsList.forEach(friend => {
+                    const div = document.createElement('div');
+                    div.style.padding = "5px 0";
+                    div.style.color = "#00ff55"; 
+                    div.style.fontSize = "0.85rem";
+                    div.innerText = `• @${friend} [SECURE CONNECTION]`;
+                    friendBox.appendChild(div);
+                });
+            }
         }
 
     } catch (err) {
         console.error("Failed to load social mainframe matrices:", err);
-        reqBox.innerHTML = "<p style='font-size:0.75rem; color:#ff0055;'>CRITICAL TRACK READ ERROR</p>";
+        if (reqBox) reqBox.innerHTML = "<p style='font-size:0.75rem; color:#ff0055;'>CRITICAL TRACK READ ERROR</p>";
     }
 }
 
 async function acceptFriendPipeline(senderUsername) {
-    const res = await fetch('/api/social/accept-friend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetUser: senderUsername })
-    });
-    
-    if (res.ok) {
-        alert(`SYSTEM: Friendship synchronization signed with @${senderUsername}!`);
-        loadSocialMainframe(); 
-    } else {
-        alert("ERROR: Failed to establish secure friend bridge.");
+    try {
+        const res = await fetch('/api/social/accept-friend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetUser: senderUsername })
+        });
+        
+        if (res.ok) {
+            alert(`SYSTEM: Friendship synchronization signed with @${senderUsername}!`);
+            loadSocialMainframe(); 
+        } else {
+            alert("ERROR: Failed to establish secure friend bridge.");
+        }
+    } catch (err) {
+        console.error("Friend link confirmation exception failure:", err);
     }
 }
 
@@ -613,33 +756,49 @@ async function acceptFriendPipeline(senderUsername) {
 // 10. ACCOUNT PROFILE PARAMETERS STORAGE MOTOR
 // ==========================================
 async function commitHardwareSettingsChanges() {
-    const pronouns = document.getElementById('setting-pronouns-input').value;
-    const ageInputVal = document.getElementById('setting-age-input').value;
-    const bio = document.getElementById('setting-bio-input').value;
+    const pronounsEl = document.getElementById('setting-pronouns-input');
+    const ageEl = document.getElementById('setting-age-input');
+    const bioEl = document.getElementById('setting-bio-input');
 
-    const res = await fetch('/api/user/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            pronouns, 
-            age: ageInputVal ? parseInt(ageInputVal) : null, 
-            bio
-        })
-    });
-    if(res.ok) alert("Hardware configuration parameters logged and synchronized.");
+    const pronouns = pronounsEl ? pronounsEl.value : "";
+    const ageInputVal = ageEl ? ageEl.value : "";
+    const bio = bioEl ? bioEl.value : "";
+
+    try {
+        const res = await fetch('/api/user/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                pronouns, 
+                age: ageInputVal ? parseInt(ageInputVal, 10) : null, 
+                bio
+            })
+        });
+        if(res.ok) alert("Hardware configuration parameters logged and synchronized.");
+    } catch (err) {
+        console.error("Settings parameter validation connection drop:", err);
+    }
 }
 
 async function confirmPfpUpdate() {
-    let url = document.getElementById('user-pfp-url-input').value.trim();
+    const urlEl = document.getElementById('user-pfp-url-input');
+    if (!urlEl) return;
+    let url = urlEl.value.trim();
     if(!url) return;
-    const res = await fetch('/api/profile/pfp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pfp: url })
-    });
-    if(res.ok) {
-        closeModal('modal-user-pfp');
-        document.getElementById('my-footer-avatar-img').src = url;
+
+    try {
+        const res = await fetch('/api/profile/pfp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pfp: url })
+        });
+        if(res.ok) {
+            closeModal('modal-user-pfp');
+            const avatarImg = document.getElementById('my-footer-avatar-img');
+            if (avatarImg) avatarImg.src = url;
+        }
+    } catch (err) {
+        console.error("Profile picture structural upload tracking dropped:", err);
     }
 }
 
@@ -647,24 +806,28 @@ async function confirmPfpUpdate() {
 // 11. SOCKET BROADCAST CAPTURE OVERRIDES
 // ==========================================
 socket.on('receive_chat_message', (msg) => {
-    if(msg.channelId === currentChannelId) {
+    if(msg && msg.channelId === currentChannelId) {
         renderMessageRow(msg);
     }
 });
 
 socket.on('mod_action', (data) => {
-    alert(`AUTOMOD INTERCEPTION: ${data.text || "Action triggered."}`);
+    if (data) alert(`AUTOMOD INTERCEPTION: ${data.text || "Action triggered."}`);
 });
 
 socket.on('incoming_date_packet', async (data) => {
-    if(data.target === currentUsername) {
+    if(data && data.target === currentUsername) {
         if(confirm(`⚠️ INCOMING INVITE REQUEST: @${data.sender} sent an invitation packet. Establish connection synchronization matrix?`)) {
-            await fetch('/api/social/accept-date', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetUser: data.sender })
-            });
-            alert(`Synchronization successful! Connection confirmed with @${data.sender}. Check out your bio update!`);
+            try {
+                await fetch('/api/social/accept-date', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetUser: data.sender })
+                });
+                alert(`Synchronization successful! Connection confirmed with @${data.sender}. Check out your bio update!`);
+            } catch (err) {
+                console.error("Data tracking signature validation broken:", err);
+            }
         }
     }
 });
@@ -687,31 +850,34 @@ document.addEventListener("DOMContentLoaded", async () => {
         const checkRes = await fetch('/api/auth/check');
         const checkData = await checkRes.json();
         
-        if (checkData.loggedIn) {
+        if (checkData && checkData.loggedIn) {
             currentUsername = checkData.username;
             
-            document.getElementById('auth-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            document.getElementById('my-display-username').innerText = `@${currentUsername}`;
+            const authContainer = document.getElementById('auth-container');
+            const appContainer = document.getElementById('app-container');
+            const displayUser = document.getElementById('my-display-username');
+
+            if (authContainer) authContainer.style.display = 'none';
+            if (appContainer) appContainer.style.display = 'flex';
+            if (displayUser) displayUser.innerText = `@${currentUsername}`;
             
             const pfpRes = await fetch(`/api/user/pfp/${currentUsername}`);
             const pfpData = await pfpRes.json();
-            document.getElementById('my-footer-avatar-img').src = pfpData.pfp;
+            const avatarImg = document.getElementById('my-footer-avatar-img');
+            if (avatarImg && pfpData.pfp) avatarImg.src = pfpData.pfp;
             
             loadServersRail();
             
             const profileRes = await fetch(`/api/user/profile/${currentUsername}`);
             const profileData = await profileRes.json();
             if (profileData) {
-                if (document.getElementById('setting-bio-input')) {
-                    document.getElementById('setting-bio-input').value = profileData.bio || "";
-                }
-                if (document.getElementById('setting-pronouns-input')) {
-                    document.getElementById('setting-pronouns-input').value = profileData.pronouns || "";
-                }
-                if (document.getElementById('setting-age-input') && profileData.age) {
-                    document.getElementById('setting-age-input').value = profileData.age;
-                }
+                const bioInput = document.getElementById('setting-bio-input');
+                const pronounsInput = document.getElementById('setting-pronouns-input');
+                const ageInput = document.getElementById('setting-age-input');
+
+                if (bioInput) bioInput.value = profileData.bio || "";
+                if (pronounsInput) pronounsInput.value = profileData.pronouns || "";
+                if (ageInput && profileData.age) ageInput.value = profileData.age;
             }
             console.log("⚡ SESSION RESTORE PROTOCOL: Secure token match. Welcome back.");
         }
